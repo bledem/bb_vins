@@ -25,6 +25,64 @@ bool first_image_flag = true;
 double last_image_time = 0;
 bool init_pub = 0;
 
+
+
+//void img_bbox_callback(){
+//if (img_msg->encoding == "8UC1")
+//{
+//    sensor_msgs::Image img;
+//    img_bb.header = img_msg->header;
+//    img_bb.height = img_msg->height;
+//    img_bb.width = img_msg->width;
+//    img_bb.is_bigendian = img_msg->is_bigendian;
+//    img_bb.step = img_msg->step;
+//    img_bb.data = img_msg->data;
+//    img_bb.encoding = "mono8";
+//    ptr_bb = cv_bridge::toCvCopy(img_bb, sensor_msgs::image_encodings::MONO8);
+//}
+//else
+//    ptr_bb = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
+
+//TicToc t_r;
+
+//        trackerBB[i].readImage_bb(ptr_bb->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec());
+//        }
+
+//        void bbox_callback{
+//        double img_bboxes_time = ros::Time::now().toSec();
+//        bb_state_.img_w_= bboxes_ros.img_w;
+//        bb_state_.img_h_= bboxes_ros.img_h;
+//        //cout << bboxes_ros.img_w < " is saved in " << bb_state_.img_w_ << endl;
+//        Utility::imgBboxes<float> bboxes;
+//        for (unsigned int i=0; i< bboxes_ros.bounding_boxes.size(); i++){
+//            Utility::bbox<float> boundingBox;
+//            try{
+//            boundingBox.Class = bboxes_ros.bounding_boxes.at(i).Class ;
+//            boundingBox.prob  = bboxes_ros.bounding_boxes.at(i).probability ;
+//            boundingBox.xmin  = bboxes_ros.bounding_boxes.at(i).xmin ;
+//            boundingBox.ymin = bboxes_ros.bounding_boxes.at(i).ymin ;
+//            boundingBox.xmax  = bboxes_ros.bounding_boxes.at(i).xmax ;
+//            boundingBox.ymax  = bboxes_ros.bounding_boxes.at(i).ymax ;
+//            bboxes.list.push_back(boundingBox);
+//              //ROS_INFO_STREAM("Size of bounding box " << boundingBox.xmin <<","<< boundingBox.ymin );
+//            }catch(const std::exception& e){
+//                cout << "Wrong bounding box format, skipped" << endl;
+//            }
+
+//        }
+//        if (bboxes_ros.bounding_boxes.size() > 0){
+//            ROS_INFO_STREAM("Has " << bboxes_ros.bounding_boxes.size() << " bounding boxes detected and had already " <<bbox_State_vect.size() << "~~~~~~~~~~~~~~~~~~~~~~~~~~" );
+
+//        }
+//        bb_state_.img_raw = cur_frame;
+//        bb_state_.img_bboxes= bboxes;
+//        bb_state_.img_bboxes.time =img_bboxes_time;
+//       // img_bboxes_states_.push_back(img_bboxes);
+//        frame_count =0;
+
+//}
+
+
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     if(first_image_flag)
@@ -126,7 +184,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         vector<set<int>> hash_ids(NUM_OF_CAM);
         for (int i = 0; i < NUM_OF_CAM; i++)
         {
-            auto &un_pts = trackerData[i].cur_un_pts;
+            auto &un_pts = trackerData[i].cur_un_pts; //from undistort
             auto &cur_pts = trackerData[i].cur_pts;
             auto &ids = trackerData[i].ids;
             auto &pts_velocity = trackerData[i].pts_velocity;

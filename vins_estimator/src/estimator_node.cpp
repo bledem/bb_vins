@@ -7,18 +7,29 @@
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
+#include <darknet_ros_msgs/BoundingBoxes.h>
+#include <visualization_msgs/Marker.h>
+
+#include "utility/utility.h"
+
 
 #include "estimator.h"
+#include "tracker.h"
+
 #include "parameters.h"
 #include "utility/visualization.h"
 
 
 Estimator estimator;
+bbTracker_t bbTracker_;
+visualization_msgs::Marker line_list;
+ros::Publisher marker_pub;
+
 
 std::condition_variable con;
 double current_time = -1;
 queue<sensor_msgs::ImuConstPtr> imu_buf;
-queue<sensor_msgs::PointCloudConstPtr> feature_buf;
+queue<sensor_msgs::PointCloudConstPtr> feature_buf; //collection of 3D point
 queue<sensor_msgs::PointCloudConstPtr> relo_buf;
 int sum_of_wait = 0;
 
@@ -39,6 +50,7 @@ bool init_feature = 0;
 bool init_imu = 1;
 double last_imu_t = 0;
 
+//args: IMU , out: tmp_P, tmp_V, acc_0, gyr_0 (linear accel, angular velocity)
 void predict(const sensor_msgs::ImuConstPtr &imu_msg)
 {
     double t = imu_msg->header.stamp.toSec();
@@ -77,8 +89,10 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
     gyr_0 = angular_velocity;
 }
 
+//propagate all IMU measurements contained in imu_buf
 void update()
 {
+    //take the last values of estimator
     TicToc t_predict;
     latest_time = current_time;
     tmp_P = estimator.Ps[WINDOW_SIZE];
@@ -91,9 +105,10 @@ void update()
 
     queue<sensor_msgs::ImuConstPtr> tmp_imu_buf = imu_buf;
     for (sensor_msgs::ImuConstPtr tmp_imu_msg; !tmp_imu_buf.empty(); tmp_imu_buf.pop())
-        predict(tmp_imu_buf.front());
+        predict(tmp_imu_buf.front()); //propagate the IMU measurement
 
 }
+
 
 std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>>
 getMeasurements()
@@ -163,6 +178,111 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 }
 
 
+void publish_rviz(const ros::Time& publish_time){
+
+
+    geometry_msgs::Point ray0;
+            ray0.x = tmp_P[0];
+            ray0.y = tmp_P[1];
+            ray0.z = tmp_P[2];
+//if (bb_sub_.getNumPublishers()>0 ){      //for (int i=0; i<ray_State_vect.size();i++){
+
+   if (bbTracker_.bbox_State_vect.size()>0 ){
+       line_list.type = visualization_msgs::Marker::LINE_STRIP;
+       //line_list.id = 2;
+       line_list.scale.x = 0.1;
+       line_list.header.frame_id = "map";
+       line_list.header.stamp = ros::Time::now();
+      // line_list.ns = "my lines_" +bbTracker_.ray_State_vect.size().str();
+       line_list.action = visualization_msgs::Marker::ADD;
+       line_list.pose.orientation.w = 1.0;
+      // line_list.points=[];
+
+
+  // for (int i =0; i<bbTracker_.ray_State_vect.size(); i++){
+int i=0;
+
+
+        geometry_msgs::Point raytl, raybr;
+        //cout << "We publish one bonding box out of" <<bbTracker_.bbox_State_vect.size() << endl;
+
+        raytl.x =bbTracker_.bbox_State_vect[i].r_tl.p_GR[0];
+        raytl.y =bbTracker_.bbox_State_vect[i].r_tl.p_GR[1];
+        raytl.z =bbTracker_.bbox_State_vect[i].r_tl.p_GR[2];
+//        raybr.x =bbTracker_.bbox_State_vect[i].r_br.p_GR[0];
+//        raybr.y =bbTracker_.bbox_State_vect[i].r_br.p_GR[1];
+//        raybr.z =bbTracker_.bbox_State_vect[i].r_br.p_GR[2];
+        line_list.color.b = 1.0;
+        line_list.color.r = 1.0;
+        line_list.color.g = 1.0;
+        line_list.color.a = 1.0;
+       // raytl.color.b = 1.0;
+        line_list.points.push_back(ray0);
+
+          line_list.points.push_back(raytl);
+          line_list.points.push_back(ray0);
+
+        //line_list.points.push_back(raybr);
+
+
+
+       // cout << "r_tl" <<bbTracker_.bbox_State_vect[i].r_tl.p_GR << endl;
+       // cout << "imu state " << imu_state.p_I_G << endl;
+
+//            int lines_nb = 8;
+
+//            if (line_list.points.size()> lines_nb){
+//                cout << "lines number is"<<line_list.points.size() << endl;
+//                line_list.points.clear();
+
+       //   }
+
+        marker_pub.publish(line_list);
+        line_list.points.clear();
+
+
+}
+//}
+else{
+  cout << "no bounding box, delete the rays" << endl;
+   line_list.action = visualization_msgs::Marker::DELETE;
+   line_list.points.clear();
+   marker_pub.publish(line_list);
+
+
+}
+}
+
+void boundingboxesCallback(const darknet_ros_msgs::BoundingBoxes &bboxes_ros){
+    //double img_bboxes_time = bboxes_ros.header.stamp.toSec();
+    double img_bboxes_time = ros::Time::now().toSec();
+    bbTracker_.bb_state_.img_w_= bboxes_ros.img_w;
+    bbTracker_.bb_state_.img_h_= bboxes_ros.img_h;
+    //cout << bboxes_ros.img_w < " is saved in " << bb_state_.img_w_ << endl;
+    Utility::imgBboxes<float> bboxes;
+    for (unsigned int i=0; i< bboxes_ros.bounding_boxes.size(); i++){
+        Utility::bbox<float> boundingBox;
+        try{
+        boundingBox.Class = bboxes_ros.bounding_boxes.at(i).Class ;
+        boundingBox.prob  = bboxes_ros.bounding_boxes.at(i).probability ;
+        boundingBox.xmin  = bboxes_ros.bounding_boxes.at(i).xmin ;
+        boundingBox.ymin = bboxes_ros.bounding_boxes.at(i).ymin ;
+        boundingBox.xmax  = bboxes_ros.bounding_boxes.at(i).xmax ;
+        boundingBox.ymax  = bboxes_ros.bounding_boxes.at(i).ymax ;
+        bboxes.list.push_back(boundingBox);
+          //ROS_INFO_STREAM("Size of bounding box " << boundingBox.xmin <<","<< boundingBox.ymin );
+        }catch(const std::exception& e){
+            cout << "Wrong bounding box format, skipped" << endl;
+        }
+        //bbTracker_.bb_state_.img_raw = cur_frame;
+        bbTracker_.bb_state_.img_bboxes= bboxes;
+        bbTracker_.bb_state_.img_bboxes.time =img_bboxes_time;
+       // img_bboxes_states_.push_back(img_bboxes);
+        bbTracker_.frame_count =0;
+}
+}
+
+
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
     if (!init_feature)
@@ -221,14 +341,14 @@ void process()
         m_estimator.lock();
         for (auto &measurement : measurements)
         {
-            auto img_msg = measurement.second;
+            auto img_msg = measurement.second; //for the image/pt cloud feature vector
             double dx = 0, dy = 0, dz = 0, rx = 0, ry = 0, rz = 0;
-            for (auto &imu_msg : measurement.first)
+            for (auto &imu_msg : measurement.first) //for all imu before this image
             {
                 double t = imu_msg->header.stamp.toSec();
                 double img_t = img_msg->header.stamp.toSec() + estimator.td;
                 ROS_DEBUG("imu timestamp is %f \n", imu_msg->header.stamp.toSec());
-                if (t <= img_t)
+                if (t <= img_t) //if the time of imu is less than the considered image + delay
                 { 
                     if (current_time < 0)
                         current_time = t;
@@ -245,7 +365,7 @@ void process()
                     //printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
 
                 }
-                else
+                else //the IMU is ??
                 {
                     double dt_1 = img_t - current_time;
                     double dt_2 = t - img_t;
@@ -297,15 +417,15 @@ void process()
             TicToc t_s;
             map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> image;
            // ROS_INFO("point size %u \n", img_msg->points.size());
-            for (unsigned int i = 0; i < img_msg->points.size(); i++)
+            for (unsigned int i = 0; i < img_msg->points.size(); i++) //for all the points in the poincloud
             {
                 int v = img_msg->channels[0].values[i] + 0.5;
                 int feature_id = v / NUM_OF_CAM;
                 int camera_id = v % NUM_OF_CAM;
-                double x = img_msg->points[i].x;
+                double x = img_msg->points[i].x; //undistorded
                 double y = img_msg->points[i].y;
                 double z = img_msg->points[i].z;
-                double p_u = img_msg->channels[1].values[i];
+                double p_u = img_msg->channels[1].values[i]; //pixel values
                 double p_v = img_msg->channels[2].values[i];
                 double velocity_x = img_msg->channels[3].values[i];
                 double velocity_y = img_msg->channels[4].values[i];
@@ -338,12 +458,17 @@ void process()
         m_estimator.unlock();
         m_buf.lock();
         m_state.lock();
-        if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
+        if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)           
             update();
+        bbTracker_.init(tmp_P, tmp_Q, estimator.ric[NUM_OF_CAM-1], estimator.tic[NUM_OF_CAM-1]); //check the value
+
         m_state.unlock();
         m_buf.unlock();
     }
 }
+
+
+
 
 int main(int argc, char **argv)
 {
@@ -351,6 +476,9 @@ int main(int argc, char **argv)
     ros::NodeHandle n("~");
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     readParameters(n);
+    std::string config_file;
+    n.getParam("config_file", config_file);
+
     estimator.setParameter();
 #ifdef EIGEN_DONT_PARALLELIZE
     ROS_DEBUG("EIGEN_DONT_PARALLELIZE");
@@ -363,6 +491,7 @@ int main(int argc, char **argv)
     ros::Subscriber sub_image = n.subscribe("/feature_tracker/feature", 2000, feature_callback);
     ros::Subscriber sub_restart = n.subscribe("/feature_tracker/restart", 2000, restart_callback);
     ros::Subscriber sub_relo_points = n.subscribe("/pose_graph/match_points", 2000, relocalization_callback);
+    ros::Subscriber bb_sub_= n.subscribe("bounding_boxes", 2000, boundingboxesCallback);
 
     std::thread measurement_process{process};
     ros::spin();

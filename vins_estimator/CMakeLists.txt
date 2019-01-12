@@ -11,8 +11,10 @@ find_package(catkin REQUIRED COMPONENTS
     std_msgs
     geometry_msgs
     nav_msgs
+    camera_model
     tf
     cv_bridge
+    darknet_ros_msgs
     )
 
 find_package(OpenCV REQUIRED)
@@ -21,6 +23,15 @@ message(WARNING "OpenCV_VERSION: ${OpenCV_VERSION}")
 
 find_package(Ceres REQUIRED)
 
+# Generate messages in the 'msg' folder
+add_message_files(
+ FILES
+ CamState.msg
+ CamStates.msg
+ StageTiming.msg
+ BoundingBox.msg
+ BoundingBoxes.msg
+)
 include_directories(${catkin_INCLUDE_DIRS} ${CERES_INCLUDE_DIRS})
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -37,6 +48,7 @@ add_executable(vins_estimator
     src/parameters.cpp
     src/estimator.cpp
     src/feature_manager.cpp
+    src/tracker.cpp
     src/factor/pose_local_parameterization.cpp
     src/factor/projection_factor.cpp
     src/factor/projection_td_factor.cpp

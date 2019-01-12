@@ -4,6 +4,8 @@
 #include <cassert>
 #include <cstring>
 #include <eigen3/Eigen/Dense>
+#include <Eigen/Geometry>
+#include <vector>
 
 class Utility
 {
@@ -136,5 +138,98 @@ class Utility
       else
         return angle_degrees +
             two_pi * std::floor((-angle_degrees + T(180)) / two_pi);
-    };
+    }
+
+    template <typename T>
+      using Vector3 = Eigen::Matrix<T, 3, 1>;
+
+template <typename T>
+  struct bbox {
+  float xmin, ymin, xmax, ymax, prob;
+
+  int num;
+ std::string Class;
 };
+
+template <typename T>
+  struct imgBboxes {
+
+  std::vector<Utility::bbox<T>> list;
+  float time;
+};
+
+template <typename T>
+    struct ray {      
+       Eigen::Vector3d  p_GR;
+      T time;
+      int state_id;
+      int last_correlated_id;
+      std::vector<size_t> tracked_feature_ids;
+    };
+
+
+
+  template <typename T>
+    using Quaternion = Eigen::Quaternion<T>;
+
+
+      template <typename T>
+        using Matrix3 = Eigen::Matrix<T, 3, 3>;
+
+      template <typename T>
+        using Matrix4 = Eigen::Matrix<T, 4, 4>;
+
+      template <typename T>
+        using MatrixX = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
+
+      template <typename T>
+        using RowVector3 = Eigen::Matrix<T, 1, 3>;
+
+      template <typename T>
+        using Vector2 = Eigen::Matrix<T, 2, 1>;
+
+
+
+      template <typename T>
+        using Vector4 = Eigen::Matrix<T, 4, 1>;
+
+      template <typename T>
+        using VectorX = Eigen::Matrix<T, Eigen::Dynamic, 1>;
+
+      template <typename T>
+        using Point = Vector3<T>;
+
+      template <typename T>
+        using GyroscopeReading = Vector3<T>;
+
+      template <typename T>
+        using AccelerometerReading = Vector3<T>;
+
+      template <typename T>
+        using Isometry3 = Eigen::Transform<T,3,Eigen::Isometry>;
+
+
+    template <typename T>
+       struct imuState {
+         Eigen::Vector3d p_I_G;
+         Eigen::Quaterniond q_IG;
+       };
+
+       template <typename T>
+           struct bboxState {
+                size_t bbox_id;
+               size_t feature_id[4]= {0,0,0,0}; //track id
+               ray<T> r_tl, r_br;
+                Eigen::Vector3d  p_f_G_tl, p_f_G_br ;
+             T time;
+       //last YOLO detection values (not updated)
+               bbox<T> prev_detection, cur_detection;
+               int age, nb_detected; //for every new object
+               float prev_time_detection;
+             std::string Class;
+               bool associated;
+           };
+
+    };
+
+
