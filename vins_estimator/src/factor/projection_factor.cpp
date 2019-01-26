@@ -3,6 +3,8 @@
 Eigen::Matrix2d ProjectionFactor::sqrt_info;
 double ProjectionFactor::sum_t;
 
+
+//i_point is the first observation of the feature , j_point is from the i+1 to the the last detected point
 ProjectionFactor::ProjectionFactor(const Eigen::Vector3d &_pts_i, const Eigen::Vector3d &_pts_j) : pts_i(_pts_i), pts_j(_pts_j)
 {
 #ifdef UNIT_SPHERE_ERROR
@@ -21,16 +23,16 @@ ProjectionFactor::ProjectionFactor(const Eigen::Vector3d &_pts_i, const Eigen::V
 bool ProjectionFactor::Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
 {
     TicToc tic_toc;
-    Eigen::Vector3d Pi(parameters[0][0], parameters[0][1], parameters[0][2]);
+    Eigen::Vector3d Pi(parameters[0][0], parameters[0][1], parameters[0][2]); //ParaPose (Pose_x, pose_y, pose_z, q1x,qy,qz,qw) of first
     Eigen::Quaterniond Qi(parameters[0][6], parameters[0][3], parameters[0][4], parameters[0][5]);
 
-    Eigen::Vector3d Pj(parameters[1][0], parameters[1][1], parameters[1][2]);
+    Eigen::Vector3d Pj(parameters[1][0], parameters[1][1], parameters[1][2]); //ParaPose for all the features observation after te first
     Eigen::Quaterniond Qj(parameters[1][6], parameters[1][3], parameters[1][4], parameters[1][5]);
 
-    Eigen::Vector3d tic(parameters[2][0], parameters[2][1], parameters[2][2]);
+    Eigen::Vector3d tic(parameters[2][0], parameters[2][1], parameters[2][2]); //Extrinsic qic/tic=from Camera To IMU
     Eigen::Quaterniond qic(parameters[2][6], parameters[2][3], parameters[2][4], parameters[2][5]);
 
-    double inv_dep_i = parameters[3][0];
+    double inv_dep_i = parameters[3][0]; //inv dep of the feature
 
     Eigen::Vector3d pts_camera_i = pts_i / inv_dep_i;
     Eigen::Vector3d pts_imu_i = qic * pts_camera_i + tic;

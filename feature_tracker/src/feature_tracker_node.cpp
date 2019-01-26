@@ -27,60 +27,7 @@ bool init_pub = 0;
 
 
 
-//void img_bbox_callback(){
-//if (img_msg->encoding == "8UC1")
-//{
-//    sensor_msgs::Image img;
-//    img_bb.header = img_msg->header;
-//    img_bb.height = img_msg->height;
-//    img_bb.width = img_msg->width;
-//    img_bb.is_bigendian = img_msg->is_bigendian;
-//    img_bb.step = img_msg->step;
-//    img_bb.data = img_msg->data;
-//    img_bb.encoding = "mono8";
-//    ptr_bb = cv_bridge::toCvCopy(img_bb, sensor_msgs::image_encodings::MONO8);
-//}
-//else
-//    ptr_bb = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
 
-//TicToc t_r;
-
-//        trackerBB[i].readImage_bb(ptr_bb->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec());
-//        }
-
-//        void bbox_callback{
-//        double img_bboxes_time = ros::Time::now().toSec();
-//        bb_state_.img_w_= bboxes_ros.img_w;
-//        bb_state_.img_h_= bboxes_ros.img_h;
-//        //cout << bboxes_ros.img_w < " is saved in " << bb_state_.img_w_ << endl;
-//        Utility::imgBboxes<float> bboxes;
-//        for (unsigned int i=0; i< bboxes_ros.bounding_boxes.size(); i++){
-//            Utility::bbox<float> boundingBox;
-//            try{
-//            boundingBox.Class = bboxes_ros.bounding_boxes.at(i).Class ;
-//            boundingBox.prob  = bboxes_ros.bounding_boxes.at(i).probability ;
-//            boundingBox.xmin  = bboxes_ros.bounding_boxes.at(i).xmin ;
-//            boundingBox.ymin = bboxes_ros.bounding_boxes.at(i).ymin ;
-//            boundingBox.xmax  = bboxes_ros.bounding_boxes.at(i).xmax ;
-//            boundingBox.ymax  = bboxes_ros.bounding_boxes.at(i).ymax ;
-//            bboxes.list.push_back(boundingBox);
-//              //ROS_INFO_STREAM("Size of bounding box " << boundingBox.xmin <<","<< boundingBox.ymin );
-//            }catch(const std::exception& e){
-//                cout << "Wrong bounding box format, skipped" << endl;
-//            }
-
-//        }
-//        if (bboxes_ros.bounding_boxes.size() > 0){
-//            ROS_INFO_STREAM("Has " << bboxes_ros.bounding_boxes.size() << " bounding boxes detected and had already " <<bbox_State_vect.size() << "~~~~~~~~~~~~~~~~~~~~~~~~~~" );
-
-//        }
-//        bb_state_.img_raw = cur_frame;
-//        bb_state_.img_bboxes= bboxes;
-//        bb_state_.img_bboxes.time =img_bboxes_time;
-//       // img_bboxes_states_.push_back(img_bboxes);
-//        frame_count =0;
-
-//}
 
 
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
@@ -141,7 +88,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     {
         ROS_DEBUG("processing camera %d", i);
         if (i != 1 || !STEREO_TRACK)
-            trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec());
+            trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec()); //perform OpticalFlow, mask and ransac
         else
         {
             if (EQUALIZE)
@@ -163,7 +110,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         bool completed = false;
         for (int j = 0; j < NUM_OF_CAM; j++)
             if (j != 1 || !STEREO_TRACK)
-                completed |= trackerData[j].updateID(i);
+                completed |= trackerData[j].updateID(i); //-1 transformed in 0
         if (!completed)
             break;
     }
@@ -182,13 +129,13 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         feature_points->header.frame_id = "world";
 
         vector<set<int>> hash_ids(NUM_OF_CAM);
-        for (int i = 0; i < NUM_OF_CAM; i++)
+        for (int i = 0; i < NUM_OF_CAM; i++) //i is always 0 because only one camera
         {
-            auto &un_pts = trackerData[i].cur_un_pts; //from undistort
-            auto &cur_pts = trackerData[i].cur_pts;
-            auto &ids = trackerData[i].ids;
+            auto &un_pts = trackerData[i].cur_un_pts; // undistort detected pts by feature detector OR otpical flow
+            auto &cur_pts = trackerData[i].cur_pts; // detected pts by feature detector OR otpical flow
+            auto &ids = trackerData[i].ids; // id of the detected featue
             auto &pts_velocity = trackerData[i].pts_velocity;
-            for (unsigned int j = 0; j < ids.size(); j++)
+            for (unsigned int j = 0; j < ids.size(); j++) //for all the already tracked feature
             {
                 if (trackerData[i].track_cnt[j] > 1)
                 {
@@ -199,7 +146,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                     p.y = un_pts[j].y;
                     p.z = 1;
 
-                    feature_points->points.push_back(p);
+                    feature_points->points.push_back(p); //this is the cur_un_pts at the id position
                     id_of_point.values.push_back(p_id * NUM_OF_CAM + i);
                     u_of_point.values.push_back(cur_pts[j].x);
                     v_of_point.values.push_back(cur_pts[j].y);
@@ -208,7 +155,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                 }
             }
         }
-        feature_points->channels.push_back(id_of_point);
+        feature_points->channels.push_back(id_of_point); //as it was detected
         feature_points->channels.push_back(u_of_point);
         feature_points->channels.push_back(v_of_point);
         feature_points->channels.push_back(velocity_x_of_point);
@@ -235,7 +182,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 
                 for (unsigned int j = 0; j < trackerData[i].cur_pts.size(); j++)
                 {
-                    double len = std::min(1.0, 1.0 * trackerData[i].track_cnt[j] / WINDOW_SIZE);
+                    double len = std::min(1.0, 1.0 * trackerData[i].track_cnt[j] / WINDOW_SIZE); // len=0 blue in case
                     cv::circle(tmp_img, trackerData[i].cur_pts[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
                     //draw speed line
                     /*

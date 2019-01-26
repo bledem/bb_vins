@@ -78,27 +78,6 @@ void FeatureTracker::addPoints()
     }
 }
 
-//void FeatureTracker::readImage_bb()
-//{
-//    //compare current img from feature tracker and from darknet
-//    cv::Mat img;
-//    TicToc t_r;
-//    img = _img;
-//    if (forw_img.empty())
-//    {
-//        prev_img = cur_img = forw_img = img;
-//    }
-//    else
-//    {
-//        forw_img = img;
-//    }
-
-//    forw_pts.clear();
-//    cv::calcOpticalFlowPyrLK(cur_img, forw_img, cur_pts, forw_pts, status, err, cv::Size(21, 21), 3);
-//    //apply the transformation of the points send the transform to the found pixel
-//    // Ransac? to compare with matched feature
-//    undistortedPoints()
-//}
 
 void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
 {
@@ -211,7 +190,7 @@ void FeatureTracker::rejectWithF()
 
         vector<uchar> status;
         cv::findFundamentalMat(un_cur_pts, un_forw_pts, cv::FM_RANSAC, F_THRESHOLD, 0.99, status);
-        int size_a = cur_pts.size();
+        int size_a = cur_pts.size(); //we keep only the ransac inlier
         reduceVector(prev_pts, status);
         reduceVector(cur_pts, status);
         reduceVector(forw_pts, status);

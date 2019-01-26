@@ -164,6 +164,7 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
               << Q.z() << ","
               << endl;
         loop_path_file.close();
+
     }
     //draw local connection
     if (SHOW_S_EDGE)

@@ -1,11 +1,19 @@
 #pragma once
 
 #include <cmath>
+#include <ros/ros.h>
+#include <vector>
+#include <eigen3/Eigen/Dense>
 #include <cassert>
 #include <cstring>
 #include <eigen3/Eigen/Dense>
 #include <Eigen/Geometry>
+#include <opencv2/core/eigen.hpp>
+#include "geometry_msgs/Point.h"
+
 #include <vector>
+#include <opencv2/core/core.hpp>
+
 
 class Utility
 {
@@ -219,15 +227,25 @@ template <typename T>
            struct bboxState {
                 size_t bbox_id;
                size_t feature_id[4]= {0,0,0,0}; //track id
+               double depth[4]={1.0,1.0,1.0,1.0};
+		cv::Point deduced_pixel[4]= {cv::Point(0,0)};
+		cv::Point undistort_pixel[4]= {cv::Point(0,0)};
                ray<T> r_tl, r_br;
                 Eigen::Vector3d  p_f_G_tl, p_f_G_br ;
-             T time;
+		Eigen::Vector3d w_corner[4]; //to initialize to 0
+		Eigen::Vector3d locked_corner[4];
+	      std::array<float,3> avg;
+                std::vector<Eigen::Vector3d> poses_vec;
+                std::vector<Eigen::Matrix3d> rotations_vec;
+                std::vector<bbox<T>> pixel, un_pixel;
+
+             double time;
        //last YOLO detection values (not updated)
                bbox<T> prev_detection, cur_detection;
                int age, nb_detected; //for every new object
                float prev_time_detection;
              std::string Class;
-               bool associated;
+               bool associated, lock;
            };
 
     };

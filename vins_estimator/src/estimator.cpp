@@ -125,6 +125,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     ROS_DEBUG("number of feature: %d", f_manager.getFeatureCount());
     Headers[frame_count] = header;
 
+    //insert feature by frame
     ImageFrame imageframe(image, header.stamp.toSec());
     imageframe.pre_integration = tmp_pre_integration;
     all_image_frame.insert(make_pair(header.stamp.toSec(), imageframe));
@@ -196,9 +197,10 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         }
 
         TicToc t_margin;
-        slideWindow();
+        slideWindow(); //shift onf one forward and clear the last entry
         f_manager.removeFailures();
         ROS_DEBUG("marginalization costs: %fms", t_margin.toc());
+
         // prepare output of VINS
         key_poses.clear();
         for (int i = 0; i <= WINDOW_SIZE; i++)
@@ -369,7 +371,7 @@ bool Estimator::visualInitialAlign()
     }
 
     // change state
-    std::cout << frame_count << std::endl;
+    //std::cout << frame_count << std::endl;
     for (int i = 0; i <= frame_count; i++)
     {
         Matrix3d Ri = all_image_frame[Headers[i].stamp.toSec()].R;
@@ -484,7 +486,7 @@ void Estimator::solveOdometry()
 
 void Estimator::vector2double()
 {
-    for (int i = 0; i <= WINDOW_SIZE; i++)
+    for (int i = 0; i <= WINDOW_SIZE; i++) //i is th nb of feature
     {
         para_Pose[i][0] = Ps[i].x();
         para_Pose[i][1] = Ps[i].y();
@@ -717,6 +719,7 @@ void Estimator::optimization()
     }
     int f_m_cnt = 0;
     int feature_index = -1;
+    //for all the feature
     for (auto &it_per_id : f_manager.feature)
     {
         it_per_id.used_num = it_per_id.feature_per_frame.size();
@@ -728,7 +731,7 @@ void Estimator::optimization()
         int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
         
         Vector3d pts_i = it_per_id.feature_per_frame[0].point; //undistorted point
-
+//for all the point detected for ONE feature
         for (auto &it_per_frame : it_per_id.feature_per_frame)
         {
             imu_j++;
@@ -1001,6 +1004,7 @@ void Estimator::optimization()
     ROS_DEBUG("whole time for ceres: %f", t_whole.toc());
 }
 
+//shift onf one forward and clear the last entry
 void Estimator::slideWindow()
 {
     TicToc t_margin;

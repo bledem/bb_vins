@@ -41,7 +41,7 @@ int FeatureManager::getFeatureCount()
     return cnt;
 }
 
-
+// image is constructed by : image[feature_id].emplace_back(camera_id,  xyz_uv_velocity);
 bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double td)
 {
     ROS_DEBUG("input feature: %d", (int)image.size());
@@ -49,27 +49,37 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     double parallax_sum = 0;
     int parallax_num = 0;
     last_track_num = 0;
+    //ROS_DEBUG("in FeatureManager AdParallax  feature id",  feature_id );
+    //std::cout  << "in FeatureManager AdParallax  image size" << image.size() << std::endl;
+    int added=0;
     for (auto &id_pts : image)
     {
-        FeaturePerFrame f_per_fra(id_pts.second[0].second, td);
+
+        FeaturePerFrame f_per_fra(id_pts.second[0].second, td); //take first xyz_uv_velocity  of the vector because map( FIRST, VECTOR(PAIR(FIRST, xyz_uv_velocity)
 
         int feature_id = id_pts.first;
-        auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeaturePerId &it)
+        auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeaturePerId &it) //if this feature already in feature
                           {
             return it.feature_id == feature_id;
                           });
 
-        if (it == feature.end())
+        if (it == feature.end()) //either add new feature
         {
-            feature.push_back(FeaturePerId(feature_id, frame_count));
+            feature.push_back(FeaturePerId(feature_id, frame_count)); //if already tracked we add this frame
             feature.back().feature_per_frame.push_back(f_per_fra);
+            added++;
         }
-        else if (it->feature_id == feature_id)
+
+         else if (it->feature_id == feature_id) //either update the feature
         {
             it->feature_per_frame.push_back(f_per_fra);
             last_track_num++;
         }
+
+
     }
+    //std::cout  << "in FeatureManager AdParallax  added " << added << std::endl;
+
 
     if (frame_count < 2 || last_track_num < 20)
         return true;
@@ -148,7 +158,7 @@ void FeatureManager::setDepth(const VectorXd &x)
             continue;
 
         it_per_id.estimated_depth = 1.0 / x(++feature_index);
-        //ROS_INFO("feature id %d , start_frame %d, depth %f ", it_per_id->feature_id, it_per_id-> start_frame, it_per_id->estimated_depth);
+        ROS_DEBUG("feature id %d , start_frame %d, depth %f ", it_per_id.feature_id, it_per_id.start_frame, it_per_id.estimated_depth);
         if (it_per_id.estimated_depth < 0)
         {
             it_per_id.solve_flag = 2;
@@ -156,6 +166,7 @@ void FeatureManager::setDepth(const VectorXd &x)
         else
             it_per_id.solve_flag = 1;
     }
+
 }
 
 void FeatureManager::removeFailures()
@@ -199,15 +210,20 @@ VectorXd FeatureManager::getDepthVector()
     return dep_vec;
 }
 
+
+//for all the feature that have at least three tracks
+//for non regular estimated depth
+//estimate the depth
 void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
 {
     for (auto &it_per_id : feature)
     {
+
         it_per_id.used_num = it_per_id.feature_per_frame.size();
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
             continue;
 
-        if (it_per_id.estimated_depth > 0)
+        if (it_per_id.estimated_depth > 0) // if depth regular we zill optimize with the tracker observation
             continue;
         int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
 
@@ -225,7 +241,7 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
         {
             imu_j++;
 
-            Eigen::Vector3d t1 = Ps[imu_j] + Rs[imu_j] * tic[0];
+            Eigen::Vector3d t1 = Ps[imu_j] + Rs[imu_j] * tic[0];  // TRANSFORMATION from cam to imu
             Eigen::Matrix3d R1 = Rs[imu_j] * ric[0];
             Eigen::Vector3d t = R0.transpose() * (t1 - t0);
             Eigen::Matrix3d R = R0.transpose() * R1;
@@ -254,6 +270,8 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
         }
 
     }
+    //std::cout << " Triangulation of all feature attribute size :"<<  feature.size() << std::endl;
+
 }
 
 void FeatureManager::removeOutlier()
@@ -292,7 +310,7 @@ void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3
             }
             else
             {
-                Eigen::Vector3d pts_i = uv_i * it->estimated_depth;
+                Eigen::Vector3d pts_i = uv_i * it->estimated_depth;   //TRANSFORMATION
                 Eigen::Vector3d w_pts_i = marg_R * pts_i + marg_P;
                 Eigen::Vector3d pts_j = new_R.transpose() * (w_pts_i - new_P);
                 double dep_j = pts_j(2);
