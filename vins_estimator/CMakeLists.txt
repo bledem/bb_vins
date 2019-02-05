@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
     geometry_msgs
     nav_msgs
     camera_model
+    image_transport
     tf
     cv_bridge
     darknet_ros_msgs

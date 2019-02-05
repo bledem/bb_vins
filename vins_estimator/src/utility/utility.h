@@ -234,8 +234,10 @@ template <typename T>
                 Eigen::Vector3d  p_f_G_tl, p_f_G_br ;
 		Eigen::Vector3d w_corner[4]; //to initialize to 0
 		Eigen::Vector3d locked_corner[4];
+
 	      std::array<float,3> avg;
                 std::vector<Eigen::Vector3d> poses_vec;
+ 		std::pair<std::vector<Eigen::Vector3d>, Eigen::Vector3d> locked_bbox; //vec of the locked parallepiped
                 std::vector<Eigen::Matrix3d> rotations_vec;
                 std::vector<bbox<T>> pixel, un_pixel;
 
@@ -245,9 +247,27 @@ template <typename T>
                int age, nb_detected; //for every new object
                float prev_time_detection;
              std::string Class;
-               bool associated, lock;
+               bool associated;
+		int lock_proba=0;
+		cv::Mat last_img;
+		std::string type_detection; // cnn, optical, repro, matching
            };
 
+
+           struct locked_box {
+                size_t bbox_id;
+	        Eigen::Vector3d center;
+ 		std::vector<Eigen::Vector3d> corner_vec;
+                Eigen::Vector2d bbox_wid_len_vec;
+ };
+
+           struct all_locked_box {
+std::vector<size_t> bbox_id_vec;
+std::vector<locked_box> locked_boxes;
+int count=0;
+
+};
+	
     };
 
 

@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <iostream>
+#include <string>
 
 // OpenCV
 #include <opencv2/imgproc/imgproc.hpp>
@@ -32,6 +33,9 @@
 #include "camodocal/camera_models/CataCamera.h"
 #include "camodocal/camera_models/PinholeCamera.h"
 #include <opencv2/core/eigen.hpp>
+#include <opencv2/tracking.hpp>
+#include <opencv2/features2d.hpp>
+#include "opencv2/xfeatures2d.hpp"
 
 // Extra
 #include "non_max_supp/utils.hpp"
@@ -96,6 +100,10 @@ public:
     double estimated_depth;
     bool depth_flag;
 
+    //Tracker info
+    std::string trackerType;
+    //cv::Tracker Tracker ;
+    cv::Ptr<cv::MultiTracker> multiTracker ;
 
     float img_w_, img_h_;
     cv::Mat prev_frame, cur_frame;
@@ -110,6 +118,7 @@ public:
     boundingBoxState_t bb_state_; //detected bbox in the callback
     bool init_;
     std::vector<size_t> bbox_feature_id;
+    std::vector<cv::Scalar> colors;
 
 
 //    void init(  Eigen::Vector3d curr_pos_p,
@@ -122,7 +131,8 @@ Utility::bbox<float> undistortPoint(Utility::bbox<float> tar_bbox);
    void update_pose(Eigen::Vector3d curr_pos_p,
                     Eigen::Quaterniond curr_pos_q, Eigen::Matrix3d R_imu_cam, Eigen::Vector3d p_C_I);
    void shift_frame(cv::Mat cur_frame);
-   void shift_bbox(Utility::bboxState<float>& bbox_state);
+   float shift_bbox(Utility::bboxState<float>& bbox_state, cv::Mat new_frame );
+   void shift_all(cv::Mat new_frame, cv::Mat &output_frame);
 
    void newBB(Utility::imgBboxes<float> img_bboxes);
    void project_pixel_to_world(  Utility::ray<float>& tl_ray, Utility::ray<float>& br_ray,
@@ -133,9 +143,14 @@ Utility::bbox<float> undistortPoint(Utility::bbox<float> tar_bbox);
                                            //Eigen::aligned_allocator<Utility::Vector2<float>>>  new_features_dist_, corner_detector::IdVector new_ids, std::vector<size_t> id_to_delete);
    void project_pixel_to_pixel();
    void update_id(const std::map<int, std::vector<std::pair<int, Eigen::Matrix<double, 7, 1>>>> &image);
-   bool IOU(Utility::bbox<float> bboxes1, Utility::bbox<float> bboxes2);
+   bool IOU(Utility::bbox<float> bboxes1, Utility::bbox<float> bboxes2, float thresh_args);
    void cameraCallback(const sensor_msgs::ImageConstPtr &msg);
    void lock_bbox();
+   void predict_missing(Eigen::Vector3d (& w_corner)[4], int missing, float avg_x);
+   void reproj(float thresh);
+
+   //cv::Ptr<cv::Tracker> createTrackerByName() ;
+
 
 
 };
