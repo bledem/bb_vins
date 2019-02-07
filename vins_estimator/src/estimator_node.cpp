@@ -211,16 +211,22 @@ void publish_rviz(const ros::Time& publish_time){
    if (bbTracker_.bbox_State_vect.size()>0 ){
        line_list.markers.resize(bbTracker_.bbox_State_vect.size());
 
-
       // line_list.markers[i].points=[];
-
+bool new_vec=false;
 
    for (unsigned i =0; i<bbTracker_.bbox_State_vect.size(); i++){ // for each state
-
+cout << "locked proba" << bbTracker_.bbox_State_vect[i].lock_proba << endl;
 //we transfer the locked vectors to the global vec
        //for (int p=0; p<bbTracker_.bbox_State_vect[i].locked_vec.size(); p++){ //for all the new locked vector of this state
-           auto it = find(locked_box_vec.bbox_id_vec.begin(), locked_box_vec.bbox_id_vec.end(), (bbTracker_.bbox_State_vect[i].bbox_id));
-           if  (it == locked_box_vec.bbox_id_vec.end()) { //if we never locked this bbox state
+if (bbTracker_.bbox_State_vect[i].lock_proba >= 15){
+           if (locked_box_vec.bbox_id_vec.size()>0){
+            auto it = find(locked_box_vec.bbox_id_vec.begin(), locked_box_vec.bbox_id_vec.end(), (bbTracker_.bbox_State_vect[i].bbox_id));
+            new_vec=(it == locked_box_vec.bbox_id_vec.end());
+           }else if (locked_box_vec.bbox_id_vec.size()==0) {
+               new_vec=true;
+
+           }
+           if  (new_vec && bbTracker_.bbox_State_vect[i].nb_detected>5 ) { //if we never locked this bbox state
            Utility::locked_box bbox;
            bbox.bbox_id = bbTracker_.bbox_State_vect[i].bbox_id;
            bbox.center = bbTracker_.bbox_State_vect[i].locked_bbox.second;
@@ -231,9 +237,11 @@ void publish_rviz(const ros::Time& publish_time){
           // bbTracker_.bbox_State_vect[i].locked_vec.erase(bbTracker_.bbox_State_vect[i].locked_vec.begin() + p);
            cout << "Add locked bbox with" <<  bbox.bbox_id <<  endl;
 
-      } else { //we update this locked box (if 4 corner instead of three?
+      } else if (locked_box_vec.bbox_id_vec.size()>0) { //we update this locked box (if 4 corner instead of three?
            Utility::locked_box bbox;
            bbox.bbox_id = bbTracker_.bbox_State_vect[i].bbox_id;
+           auto it = find(locked_box_vec.bbox_id_vec.begin(), locked_box_vec.bbox_id_vec.end(), (bbTracker_.bbox_State_vect[i].bbox_id));
+
            //cout <<"CHECK if index is fitting. For "<<bbTracker_.bbox_State_vect[i].bbox_id << "is situated in " << index << "position of this vector" <<locked_box_vec.bbox_id_vec << endl;
            int index = std::distance( locked_box_vec.bbox_id_vec.begin(), it ); //index is the index of the locked box with this id
 
@@ -242,7 +250,7 @@ void publish_rviz(const ros::Time& publish_time){
            locked_box_vec.count =0;
            cout << "Update locked_bbox vec with bbox id " <<  bbox.bbox_id <<  endl;
 
-       }
+       }}
        //}
 
            //cout << "DEBUG marker" << cube_list.markers.size() << "and locked vec "<< locked_box_vec.bbox_id_vec.size() <<endl;
@@ -379,7 +387,6 @@ void publish_extra(const ros::Time& publish_time)
     point_cloud.header.frame_id = "world";
     point_cloud.header.stamp = ros::Time::now();
 
-    cout <<"0" << endl;
 
     if (bbTracker_.bbox_State_vect.size()>0 && estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR){
 // the bounding box just detected
@@ -389,20 +396,18 @@ void publish_extra(const ros::Time& publish_time)
         if (bbTracker_.bb_state_.img_bboxes.list.size()>0){
         cv::Point2f tl = cv::Point2f(bbTracker_.bb_state_.img_bboxes.list[i].xmin, bbTracker_.bb_state_.img_bboxes.list[i].ymin);
         cv::Point2f br = cv::Point2f(bbTracker_.bb_state_.img_bboxes.list[i].xmax, bbTracker_.bb_state_.img_bboxes.list[i].ymax);
-        cout <<"1" << endl;
 
         //YOLO DETECTION IN GREEN
         cv::rectangle(image, tl, br,cv::Scalar(0, 255, 0), 2, 8, 0) ; // color in BGR
           //ROS_INFO_STREAM(" \n real tl " << tl << "and  br" << br );
         putText(image, "YOLO", Point2f(300+20*i,100+20*i), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,0,255), 2 );
 
-        cout <<"2" << endl;
 
           //ROS_INFO_STREAM("publshing the TEST bbox in blue ===================");
           Utility::bboxState<float> rayState;
           Utility::bbox<float> test_bbox ;
          // cv::Point2f bbox_corner[4];
-          bbTracker_.project_pixel_to_world(rayState.r_tl ,rayState.r_br , bbTracker_.bb_state_.img_bboxes.list[i] );
+          //bbTracker_.project_pixel_to_world(rayState.r_tl ,rayState.r_br , bbTracker_.bb_state_.img_bboxes.list[i] );
 //          bbTracker_.project_world_to_pixel(rayState, test_bbox);
 //          tl = cv::Point2f(test_bbox.xmin, test_bbox.ymin);
 //          br = cv::Point2f(test_bbox.xmax, test_bbox.ymax);
@@ -413,17 +418,14 @@ void publish_extra(const ros::Time& publish_time)
 
 }
 
-
     //bounding box predicted
     bbTracker_.project_pixel_to_pixel();
-
     for (unsigned i=0; i<bbTracker_.bbox_State_vect.size(); i++){
         if(bbTracker_.bbox_State_vect[i].nb_detected>4){
         Utility::bbox<float> predicted_bbox ;
          cv::Point2f bbox_corner[4], deduced_corner[4];
          bbTracker_.project_world_to_pixel(bbTracker_.bbox_State_vect[i].w_corner, predicted_bbox);
          bbTracker_.bbox_to_points_cv(predicted_bbox, deduced_corner ); //deduced corner takes the bbox_state.w_corner[0] and project them in the current cam_image frame
-         cout <<"3" << endl;
 
            //DEDUCED FROM CUR DETECTION IN RED
         cv::rectangle(image, deduced_corner[0], deduced_corner[3],cv::Scalar(0, 0, 255), 2, 8, 0) ;
@@ -437,15 +439,19 @@ void publish_extra(const ros::Time& publish_time)
 //        cv::Point2f br = cv::Point2f(bbTracker_.bbox_State_vect[i].deduced_pixel[3]);
         bbTracker_.project_world_to_pixel(bbTracker_.bbox_State_vect[i].locked_corner, predicted_bbox);
         bbTracker_.bbox_to_points_cv(predicted_bbox, deduced_corner ); //deduced corner takes the bbox_state.w_corner[0] and project them in the current cam_image frame
-        cout <<"4" << endl;
 
         //DEDUCED FROM LOCKED IN WHITE
         cv::rectangle(image, deduced_corner[0], deduced_corner[3],cv::Scalar(255, 255, 255), 2, 8, 0) ;
           //ROS_INFO_STREAM("==================tl " << tl << "\n br" << br  );
 
        putText(image, bbTracker_.bbox_State_vect[i].type_detection, Point2f(100+20*i,100+20*i), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
-       cout <<"end" << endl;
 
+
+       bbTracker_.project_world_to_pixel(bbTracker_.bbox_State_vect[i].locked_corner_def, predicted_bbox);
+       bbTracker_.bbox_to_points_cv(predicted_bbox, deduced_corner ); //deduced corner takes the bbox_state.w_corner[0] and project them in the current cam_image frame
+
+       //DEDUCED FROM LOCKED IN WHITE
+       cv::rectangle(image, deduced_corner[0], deduced_corner[3],cv::Scalar(255, 0, 0), 2, 8, 0) ;
 }
 
     for (unsigned int k=0; k<4;k++){
@@ -543,7 +549,7 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
 
         //cout << bboxes_ros.img_w < " is saved in " << bb_state_.img_w_ << endl;
         Utility::imgBboxes<float> bboxes;
-        Utility::bbox<float> predicted_bbox ;
+        Utility::bbox<float> predicted_bbox, predicted_bbox_def ;
         int added=0;
 
 
@@ -590,9 +596,11 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
                              valid = false;
                           }
                           bbTracker_.project_world_to_pixel(bbTracker_.bbox_State_vect[j].locked_corner, predicted_bbox);
+                          bbTracker_.project_world_to_pixel(bbTracker_.bbox_State_vect[j].locked_corner_def, predicted_bbox_def);
 
                 if(bbTracker_.IOU(boundingBox, bbTracker_.bbox_State_vect[j].cur_detection, thresh_IOU)
-                        || bbTracker_.IOU(boundingBox, predicted_bbox, thresh_IOU)){
+                        || bbTracker_.IOU(boundingBox, predicted_bbox, thresh_IOU)
+                        || bbTracker_.IOU(boundingBox, predicted_bbox_def, thresh_IOU) ){
                                 bbTracker_.bbox_State_vect[j].prev_detection = bbTracker_.bbox_State_vect[j].cur_detection; //update already existing bbox
                                 bbTracker_.bbox_State_vect[j].cur_detection = boundingBox;
                                 bbTracker_.bbox_State_vect[j].age=0;
@@ -635,6 +643,8 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
                        rayState.un_pixel.push_back(un_bbox);
                        rayState.last_img= bbTracker_.cur_frame;
                        rayState.type_detection= "cnn";
+                       rayState.lock_proba = 0;
+
 
                        //rayState.w_corner= {corner_init,corner_init,corner_init,corner_init};
                         added++;

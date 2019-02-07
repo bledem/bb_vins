@@ -240,31 +240,48 @@ void bbTracker_t::predict_missing(Eigen::Vector3d (& w_corner)[4], int missing, 
 }
 }
 
+
+float calc_err(Eigen::Vector3d w_corner[4]){
+    Eigen::Vector3d tl = w_corner[0];
+    Eigen::Vector3d tr = w_corner[1];
+    Eigen::Vector3d br = w_corner[3];
+    Eigen::Vector3d bl = w_corner[2];
+
+    float err_x = abs(tl[0] - tr[0]) + abs(tl[0]-br[0]) + abs(tr[0] - br[0]) + abs(br[0]-bl[0]);
+    float err_y = abs(tr[1]-br[1]) + abs(tl[1]-bl[1]);
+    float err_z = abs(bl[2]-br[2]) + abs(tl[1]-tr[2]);
+    return err_x + err_y + err_z;
+}
+
+
 //we lock the box if more than three point
 void bbTracker_t::lock_bbox(){
 
     //to draw the rectangle
-    for (unsigned k=0; k<bbox_State_vect.size(); k++) { //for each box
+    for (unsigned int k=0; k<bbox_State_vect.size(); k++) { //for each box
         std::array<float,3> avg= {0.0};
         std::vector<Eigen::Vector3d> vec_corner;
         Eigen::Vector3d avg_vec;
-        int missing =4;
+        size_t missing_ =4;
+        size_t count_miss=0;
         int count=0;
-
-        for (unsigned int i=0; i<4; i++){ //for each corner
-            if (bbox_State_vect[k].w_corner[i][0] != 0.0 && bbox_State_vect[k].w_corner[i][1] != 0.0 && bbox_State_vect[k].w_corner[i][2] != 0.0){ //if the point exists
-                avg[0]+= bbox_State_vect[k].w_corner[i][0];
-                avg[1]+= bbox_State_vect[k].w_corner[i][1];
-                avg[2]+= bbox_State_vect[k].w_corner[i][2];
+        //cout << "k" <<k <<  "missing0 " << missing_  << endl;
+        for (size_t i=0; i<4; i++){ //for each corner
+            if (abs(bbox_State_vect[k].w_corner[i][0]) > 0.001 && abs(bbox_State_vect[k].w_corner[i][1]) > 0.001 && abs(bbox_State_vect[k].w_corner[i][2]) > 0.001 ){ //if the point exists
+                avg[0]+= bbox_State_vect[k].w_corner[i][0]; //x
+                avg[1]+= bbox_State_vect[k].w_corner[i][1]; //y
+                avg[2]+= bbox_State_vect[k].w_corner[i][2]; //z
                 count++;
-            } else {
-                missing=i;
-                cout << "missing i value is" << missing << endl;
+
+            } else if (count_miss<=1) {
+                missing_=i;
+                cout << "missing " << i <<" value is" << int(missing_) << endl;
+                count_miss++;
             }
             }
 
         if (count == 3){ //we approximate the value of the missing corner
-            predict_missing(bbox_State_vect[k].w_corner, missing, avg[0]);
+            predict_missing(bbox_State_vect[k].w_corner, missing_, avg[0]);
         }
         if ((count==4 || count ==3) ){
             //cout << "enough corner, count proba:" << bbox_State_vect[k].lock_proba+1 << " and id is " << bbox_State_vect[k].bbox_id << " with values " <<  bbox_State_vect[k].avg[0]<< " " << bbox_State_vect[k].avg[1] << " " << bbox_State_vect[k].avg[2] <<
@@ -281,14 +298,17 @@ void bbTracker_t::lock_bbox(){
             bbox_State_vect[k].avg[2]=avg[2]/float(count);
 
             //cout <<"Count is" << count <<"with value" << bbox_State_vect[k].avg[0]<< " "<< bbox_State_vect[k].avg[1]<< " " << bbox_State_vect[k].avg[2] <<endl;
-         } else if (bbox_State_vect[k].lock_proba == 15) {
+         } else if (bbox_State_vect[k].lock_proba >=15) {
              for (unsigned int i=0; i<4; i++){
                  if (bbox_State_vect[k].w_corner[i][0] != 0.0)
-                    vec_corner.push_back(bbox_State_vect[k].w_corner[i]);
+                     vec_corner.push_back(bbox_State_vect[k].w_corner[i]);
+                 if (bbox_State_vect[k].lock_proba ==15)
+                         bbox_State_vect[k].locked_corner_def[i] = bbox_State_vect[k].w_corner[i];
                  if (i<3)
-                 avg_vec[i]=avg[i]/float(count);
+                    avg_vec[i]=avg[i]/float(count);
 
-            bbox_State_vect[k].locked_bbox= ( std::make_pair(vec_corner, avg_vec));
+
+                 bbox_State_vect[k].locked_bbox= ( std::make_pair(vec_corner, avg_vec));
             //cv::Ptr<cv::TrackerKCF> tracker = cv::TrackerKCF::create();
 //cout <<"before multritracker add" << endl;
 //multiTracker->add(tracker, prev_frame, cv::Rect2d(bbox_State_vect[k].prev_detection.xmin,
@@ -298,8 +318,18 @@ void bbTracker_t::lock_bbox(){
                                 //));
 }
 
+
+             //we compare the update bbox_State_vect[k].w_corner[i] and the locked_corner_def[i]
+             float err_temp = calc_err(bbox_State_vect[k].w_corner);
+             float err_def = calc_err(bbox_State_vect[k].locked_corner_def);
+             if (err_temp < err_def){
+                 for (unsigned int i=0; i<4; i++){
+                 bbox_State_vect[k].locked_corner_def[i] = bbox_State_vect[k].w_corner[i];
+             }
+             }
+
          }
-         } else if (count==0) {
+         } else if (count<=2 && bbox_State_vect[k].lock_proba>1) {
              bbox_State_vect[k].lock_proba--;
              cout << "DECREASE THE LOCK to " <<  bbox_State_vect[k].lock_proba <<endl;
          }
@@ -336,6 +366,7 @@ string type2str(int type) {
 
   return r;
 }
+
 
 void bbTracker_t::reproj(float thresh){
     for (unsigned k =0; k<bbox_State_vect.size(); k++){ // for each state
@@ -425,7 +456,6 @@ for (unsigned int i =0; i<4; i++){
      return -1;
  }
 }
-cout <<" 4" << endl;
 
 cv::imwrite( "/home/ubuntu/catkin_vins/src/VINS-Mono/img_flow.jpg", img_flow );
 if (status[0] >0 && status[1] >0){
@@ -730,10 +760,12 @@ init_=true;
 
         for (unsigned i=0; i< bbox_State_vect.size(); i++) {
            // cout <<"in process, age is " << bbox_State_vect[i].age << ". "<< endl;
-            if(bbox_State_vect[i].age >max_age_detection){
+            if(bbox_State_vect[i].age >max_age_detection+ int(bbox_State_vect[i].lock_proba/max_age_detection) ){
                 cout << "-------we erase bbox nb" << i << " and id" << bbox_State_vect[i].bbox_id <<"from bbox state" << endl;
 
                 bbox_State_vect.erase(bbox_State_vect.begin()+i);
+            }else if (bbox_State_vect[i].age >max_age_detection){
+                cout <<"============= The locked bbox saved the detection beacause age is" <<bbox_State_vect[i].age << "and thresh is " << int(bbox_State_vect[i].lock_proba/max_age_detection) <<  endl;
             }
         }
             //std::cout << "the predicted bbox is " << frame_count <<"frame year old and contains"<< bbox_State_vect.size() << "boxes" << endl;

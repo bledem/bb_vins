@@ -234,6 +234,7 @@ template <typename T>
                 Eigen::Vector3d  p_f_G_tl, p_f_G_br ;
 		Eigen::Vector3d w_corner[4]; //to initialize to 0
 		Eigen::Vector3d locked_corner[4];
+		Eigen::Vector3d locked_corner_def[4];
 
 	      std::array<float,3> avg;
                 std::vector<Eigen::Vector3d> poses_vec;
