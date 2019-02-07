@@ -51,8 +51,8 @@ bool bbTracker_t::IOU(Utility::bbox<float> bboxes1, Utility::bbox<float> bboxes2
  float bb1_area = (bboxes1.xmax-bboxes1.xmin)*(bboxes1.ymax - bboxes1.ymin);
  float bb2_area = (bboxes2.xmax - bboxes2.xmin)*(bboxes2.ymax - bboxes2.ymin );
  o = inter_area / ((bb1_area + bb2_area)- inter_area);
- cout << std::setprecision(10) <<"IOU result" << o << "thresh" << thresh << endl;
-  if (o>thresh_args){
+ //cout << std::setprecision(3) <<"IOU result" << o << "thresh" << thresh << endl;
+  if (o>=thresh_args){
          return true;
 }else{
          return false;
@@ -211,7 +211,7 @@ void bbTracker_t::project_world_to_pixel(  Eigen::Vector3d corner[],
 
 void bbTracker_t::predict_missing(Eigen::Vector3d (& w_corner)[4], int missing, float avg_x){
     switch (missing) {
-    cout << "in predict missing i value is" << missing << endl;
+    //cout << "in predict missing i value is" << missing << endl;
 
            case 0: //tl missing
         w_corner[missing][0]= avg_x;
@@ -275,7 +275,7 @@ void bbTracker_t::lock_bbox(){
 
             } else if (count_miss<=1) {
                 missing_=i;
-                cout << "missing " << i <<" value is" << int(missing_) << endl;
+                //cout << "missing " << i <<" value is" << int(missing_) << endl;
                 count_miss++;
             }
             }
@@ -371,7 +371,6 @@ string type2str(int type) {
 void bbTracker_t::reproj(float thresh){
     for (unsigned k =0; k<bbox_State_vect.size(); k++){ // for each state
         Utility::bbox<float> predicted_bbox ;
-
         project_world_to_pixel(bbox_State_vect[k].locked_corner, predicted_bbox);
         bool iou_rslt= IOU(predicted_bbox,bbox_State_vect[k].cur_detection, thresh );
         if (iou_rslt){
@@ -447,7 +446,7 @@ float bbTracker_t::shift_bbox(Utility::bboxState<float>& bbox_state, cv::Mat new
 cv::calcOpticalFlowPyrLK(prev_frame, new_frame, old_features, new_feature, status, err, cv::Size(21, 21), 3);
 
 cv::Mat img_flow=new_frame;
-cout << "size of old feature" << old_features.size()  << " and new feature" << new_feature.size() << endl;
+//cout << "size of old feature" << old_features.size()  << " and new feature" << new_feature.size() << endl;
 for (unsigned int i =0; i<4; i++){
  cv::line( img_flow, old_features[i], new_feature[i],cv::Scalar(0,255,255));
  if (new_feature.size()>4){
@@ -537,19 +536,6 @@ else{
 }
 
 
-
-void bbTracker_t::shift_frame(cv::Mat cur_frame){ //shift the bbox with coming frame
-    if(prev_frame.empty()){
-        prev_frame=cur_frame;
-        return;
-    }
-for (unsigned k=0; k<bbox_State_vect.size(); k++) {
-
-    shift_bbox(bbox_State_vect[k], cur_frame);
-    cout << bbox_State_vect[k].bbox_id << "updated with opencv" << endl;
-}
-prev_frame=cur_frame;
-}
 
 
 

@@ -215,7 +215,7 @@ void publish_rviz(const ros::Time& publish_time){
 bool new_vec=false;
 
    for (unsigned i =0; i<bbTracker_.bbox_State_vect.size(); i++){ // for each state
-cout << "locked proba" << bbTracker_.bbox_State_vect[i].lock_proba << endl;
+//cout << "locked proba" << bbTracker_.bbox_State_vect[i].lock_proba << endl;
 //we transfer the locked vectors to the global vec
        //for (int p=0; p<bbTracker_.bbox_State_vect[i].locked_vec.size(); p++){ //for all the new locked vector of this state
 if (bbTracker_.bbox_State_vect[i].lock_proba >= 15){
@@ -234,7 +234,6 @@ if (bbTracker_.bbox_State_vect[i].lock_proba >= 15){
             //add width lenght and corners
            locked_box_vec.bbox_id_vec.push_back(bbTracker_.bbox_State_vect[i].bbox_id);
             locked_box_vec.locked_boxes.push_back(bbox);
-          // bbTracker_.bbox_State_vect[i].locked_vec.erase(bbTracker_.bbox_State_vect[i].locked_vec.begin() + p);
            cout << "Add locked bbox with" <<  bbox.bbox_id <<  endl;
 
       } else if (locked_box_vec.bbox_id_vec.size()>0) { //we update this locked box (if 4 corner instead of three?
@@ -248,7 +247,7 @@ if (bbTracker_.bbox_State_vect[i].lock_proba >= 15){
            bbox.center = bbTracker_.bbox_State_vect[i].locked_bbox.second;
            locked_box_vec.locked_boxes[index] = bbox;
            locked_box_vec.count =0;
-           cout << "Update locked_bbox vec with bbox id " <<  bbox.bbox_id <<  endl;
+           //cout << "Update locked_bbox vec with bbox id " <<  bbox.bbox_id <<  endl;
 
        }}
        //}
@@ -379,6 +378,10 @@ if (bbTracker_.bbox_State_vect[i].lock_proba >= 15){
 
 void publish_extra(const ros::Time& publish_time)
 {
+    bool show_YOLO=true;
+    bool show_locked=false;
+    bool show_w_corner=false;
+
   //if(track_image_pub_.getNumSubscribers() > 0){
     display_all = cv_bridge::cvtColor(display_all, sensor_msgs::image_encodings::BGR8);
     cv::Rect ROI(0, 100,display_all->image.cols-100, display_all->image.rows-100);
@@ -390,37 +393,28 @@ void publish_extra(const ros::Time& publish_time)
 
     if (bbTracker_.bbox_State_vect.size()>0 && estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR){
 // the bounding box just detected
-    for (int i=0; i<bbTracker_.bbox_State_vect.size(); i++){
-    //ROS_INFO_STREAM("publshing the DETECTED bbox in green ===================");
-
-        if (bbTracker_.bb_state_.img_bboxes.list.size()>0){
-        cv::Point2f tl = cv::Point2f(bbTracker_.bb_state_.img_bboxes.list[i].xmin, bbTracker_.bb_state_.img_bboxes.list[i].ymin);
-        cv::Point2f br = cv::Point2f(bbTracker_.bb_state_.img_bboxes.list[i].xmax, bbTracker_.bb_state_.img_bboxes.list[i].ymax);
+        for (int b=0; b<bbTracker_.bb_state_.img_bboxes.list.size(); b++){
+        cv::Point2f tl = cv::Point2f(bbTracker_.bb_state_.img_bboxes.list[b].xmin, bbTracker_.bb_state_.img_bboxes.list[b].ymin);
+        cv::Point2f br = cv::Point2f(bbTracker_.bb_state_.img_bboxes.list[b].xmax, bbTracker_.bb_state_.img_bboxes.list[b].ymax);
 
         //YOLO DETECTION IN GREEN
+        if (show_YOLO){
         cv::rectangle(image, tl, br,cv::Scalar(0, 255, 0), 2, 8, 0) ; // color in BGR
           //ROS_INFO_STREAM(" \n real tl " << tl << "and  br" << br );
-        putText(image, "YOLO", Point2f(300+20*i,100+20*i), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,0,255), 2 );
-
-
-          //ROS_INFO_STREAM("publshing the TEST bbox in blue ===================");
-          Utility::bboxState<float> rayState;
-          Utility::bbox<float> test_bbox ;
-         // cv::Point2f bbox_corner[4];
-          //bbTracker_.project_pixel_to_world(rayState.r_tl ,rayState.r_br , bbTracker_.bb_state_.img_bboxes.list[i] );
-//          bbTracker_.project_world_to_pixel(rayState, test_bbox);
-//          tl = cv::Point2f(test_bbox.xmin, test_bbox.ymin);
-//          br = cv::Point2f(test_bbox.xmax, test_bbox.ymax);
-//          bbTracker_.bbox_to_points_cv(test_bbox, bbox_corner );
-
-//          cv::rectangle(display_all->image, tl, br,cv::Scalar(255, 0, 0), 2, 8, 0) ; // color in BGR
+        putText(image, "YOLO", Point2f(300+20*b,100+20*b), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,0,255), 2 );
+}
 
 
 }
+        ROS_INFO_STREAM("Drawing" << bbTracker_.bbox_State_vect.size()<< "bounding boxes");
+
+    for (int i=0; i<bbTracker_.bbox_State_vect.size(); i++){
+
+
 
     //bounding box predicted
     bbTracker_.project_pixel_to_pixel();
-    for (unsigned i=0; i<bbTracker_.bbox_State_vect.size(); i++){
+    for (unsigned int i=0; i<bbTracker_.bbox_State_vect.size(); i++){
         if(bbTracker_.bbox_State_vect[i].nb_detected>4){
         Utility::bbox<float> predicted_bbox ;
          cv::Point2f bbox_corner[4], deduced_corner[4];
@@ -428,9 +422,11 @@ void publish_extra(const ros::Time& publish_time)
          bbTracker_.bbox_to_points_cv(predicted_bbox, deduced_corner ); //deduced corner takes the bbox_state.w_corner[0] and project them in the current cam_image frame
 
            //DEDUCED FROM CUR DETECTION IN RED
-        cv::rectangle(image, deduced_corner[0], deduced_corner[3],cv::Scalar(0, 0, 255), 2, 8, 0) ;
-        putText(image, "w_corner", Point2f(200+20*i,100+20*i), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,0,255), 2 );
+         if (show_w_corner){
 
+        cv::rectangle(image, deduced_corner[0], deduced_corner[3],cv::Scalar(0, 0, 255), 2, 8, 0) ;
+        putText(image, "w_corner", Point2f(200+20*i,200+20*i), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,0,255), 2 );
+}
 
         //ROS_INFO_STREAM("for original bbox" << bbTracker_.bbox_State_vect[i].bbox_id << "with tl" <<bbox_corner[0] << "and br" << bbox_corner[3]
             // << "and deduced" << deduced_corner[0] <<"br" << deduced_corner[3]);
@@ -438,21 +434,43 @@ void publish_extra(const ros::Time& publish_time)
 //        cv::Point2f tl = cv::Point2f(bbTracker_.bbox_State_vect[i].deduced_pixel[0]);
 //        cv::Point2f br = cv::Point2f(bbTracker_.bbox_State_vect[i].deduced_pixel[3]);
         bbTracker_.project_world_to_pixel(bbTracker_.bbox_State_vect[i].locked_corner, predicted_bbox);
-        bbTracker_.bbox_to_points_cv(predicted_bbox, deduced_corner ); //deduced corner takes the bbox_state.w_corner[0] and project them in the current cam_image frame
 
+        //if speed to high we take the CNN width but with the position of the reproj for the final tracking
+if (abs(tmp_V[0])>0.06 || abs(tmp_V[1])>0.06 || abs(tmp_V[2])>0.06)
+            bbTracker_.reproj(0.4);
+if (abs(tmp_V[0])>0.1 || abs(tmp_V[1])>0.1 || abs(tmp_V[2])>0.1)
+            bbTracker_.reproj(0);
+
+        if (abs(tmp_V[0])>0.06 || abs(tmp_V[1])>0.06 || abs(tmp_V[2])>0.06 && bbTracker_.bbox_State_vect[i].lock_proba>=15){
+            float x_avg = (bbTracker_.bbox_State_vect[i].cur_detection.xmin + bbTracker_.bbox_State_vect[i].cur_detection.xmax)/2;
+            float y_avg = (bbTracker_.bbox_State_vect[i].cur_detection.ymin + bbTracker_.bbox_State_vect[i].cur_detection.ymax)/2;
+
+            bbTracker_.bbox_State_vect[i].final_bb[0] = cv::Point2f(x_avg-bbTracker_.bbox_State_vect[i].w_l.first/2, y_avg-bbTracker_.bbox_State_vect[i].w_l.second/2) ; //tl
+            bbTracker_.bbox_State_vect[i].final_bb[1] = cv::Point2f(x_avg+bbTracker_.bbox_State_vect[i].w_l.first/2, y_avg-bbTracker_.bbox_State_vect[i].w_l.second/2) ; //tr
+            bbTracker_.bbox_State_vect[i].final_bb[2] = cv::Point2f(x_avg-bbTracker_.bbox_State_vect[i].w_l.first/2, y_avg+bbTracker_.bbox_State_vect[i].w_l.second/2) ; //
+            bbTracker_.bbox_State_vect[i].final_bb[3] = cv::Point2f(x_avg+bbTracker_.bbox_State_vect[i].w_l.first/2, y_avg+bbTracker_.bbox_State_vect[i].w_l.second/2) ;
+            cv::rectangle(image, bbTracker_.bbox_State_vect[i].final_bb[0], bbTracker_.bbox_State_vect[i].final_bb[3],cv::Scalar(255, 255, 255), 2, 8, 0) ;
+
+        }else{
+            bbTracker_.bbox_to_points_cv(bbTracker_.bbox_State_vect[i].cur_detection, bbox_corner ); //deduced corner takes the bbox_state.w_corner[0] and project them in the current cam_image frame
+            cv::rectangle(image, bbox_corner[0], bbox_corner[3],cv::Scalar(255, 255, 255), 2, 8, 0) ;
+
+        }
+
+ cout << "%%%%%%%%%% From cur detection" << bbTracker_.bbox_State_vect[i].final_bb[0] << bbTracker_.bbox_State_vect[i].final_bb[1] << bbTracker_.bbox_State_vect[i].final_bb[2] << endl;
         //DEDUCED FROM LOCKED IN WHITE
-        cv::rectangle(image, deduced_corner[0], deduced_corner[3],cv::Scalar(255, 255, 255), 2, 8, 0) ;
-          //ROS_INFO_STREAM("==================tl " << tl << "\n br" << br  );
 
-       putText(image, bbTracker_.bbox_State_vect[i].type_detection, Point2f(100+20*i,100+20*i), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
+       putText(image, bbTracker_.bbox_State_vect[i].type_detection, Point2f(100+(20*i),100+(20*i)), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
+       putText(image, std::to_string(bbTracker_.bbox_State_vect[i].bbox_id), Point2f(100,300+(30*i)), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
+       putText(image, bbTracker_.bbox_State_vect[i].class_, Point2f(300,300+(30*i)), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
 
-
+        if (show_locked){
        bbTracker_.project_world_to_pixel(bbTracker_.bbox_State_vect[i].locked_corner_def, predicted_bbox);
        bbTracker_.bbox_to_points_cv(predicted_bbox, deduced_corner ); //deduced corner takes the bbox_state.w_corner[0] and project them in the current cam_image frame
-
        //DEDUCED FROM LOCKED IN WHITE
        cv::rectangle(image, deduced_corner[0], deduced_corner[3],cv::Scalar(255, 0, 0), 2, 8, 0) ;
 }
+        }
 
     for (unsigned int k=0; k<4;k++){
        // ROS_INFO_STREAM("Publish pointcornerof " << bbTracker_.bbox_State_vect[i].bbox_id << ":"
@@ -497,13 +515,15 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         optical_result_bridge =  cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::BGR8);
 
     }
-    ROS_INFO("RECEIVING IMG");
+    //ROS_INFO("RECEIVING IMG");
 
         //bbTracker_.shift_frame(out_img->image); //shift the detected points from prev_frame
     cv::Mat passerelle = optical_result_bridge->image;
     cv::Rect ROI(0, 100,passerelle.cols-100, passerelle.rows-100);
     cv::Mat passerelle_out = passerelle(ROI);
-     bbTracker_.shift_all(passerelle_out, passerelle_out);
+     cv::Point2f bbox_corner[4];
+     if (abs(tmp_V[0])<0.1 && abs(tmp_V[1])<0.1 && abs(tmp_V[2])<0.1)
+        bbTracker_.shift_all(passerelle_out, passerelle_out);
        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), sensor_msgs::image_encodings::BGR8, passerelle_out).toImageMsg();
        optical_image_pub_.publish(msg);
 }
@@ -576,6 +596,8 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
 
             bbTracker_.frame_count =0;
             un_bbox = bbTracker_.undistortPoint(boundingBox);
+            int width = boundingBox.xmax-boundingBox.xmin;
+            int lenght = boundingBox.ymax-boundingBox.ymin;
             //bbTracker_.multiTracker->update( bbTracker_.cur_frame);
 
      //bbTracker_.bbox_State_vect.clear(); //temporary
@@ -585,7 +607,7 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
                         bool tracked = false;
                         bool valid = true;
 
-                        cout << "When receiving bbox speed is" << tmp_V << endl;
+                        cout << "SPEED" << tmp_V.transpose() << endl;
 
                       //check if bbox is already tracked
                       for (unsigned j=0; j<bbTracker_.bbox_State_vect.size(); j++){ //check if really updating
@@ -612,7 +634,14 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
                                 bbTracker_.bbox_State_vect[j].pixel.push_back(boundingBox);
                                 bbTracker_.bbox_State_vect[j].un_pixel.push_back(un_bbox);
                                 bbTracker_.bbox_State_vect[j].last_img= bbTracker_.cur_frame;
+                                bbTracker_.bbox_State_vect[j].class_= boundingBox.Class;
+
                                 bbTracker_.bbox_State_vect[j].type_detection= "cnn";
+                                bbTracker_.bbox_State_vect[j].w_l = std::make_pair((int(bbTracker_.bbox_State_vect[j].w_l.first + width)/2), int((bbTracker_.bbox_State_vect[j].w_l.second + lenght)/2));
+                                bbTracker_.bbox_State_vect[j].final_bb[0] =  cv::Point2f(boundingBox.xmin, boundingBox.ymin);
+                                bbTracker_.bbox_State_vect[j].final_bb[1] = cv::Point2f(boundingBox.xmax, boundingBox.ymin);
+                                bbTracker_.bbox_State_vect[j].final_bb[2] =  cv::Point2f(boundingBox.xmin, boundingBox.ymax);
+                                bbTracker_.bbox_State_vect[j].final_bb[3] = cv::Point2f(boundingBox.xmax, boundingBox.ymax); //in order to preserve our tracking even with high speed movement
 
 
                                 //add the pose and the pixel values in the sliding window
@@ -643,7 +672,14 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
                        rayState.un_pixel.push_back(un_bbox);
                        rayState.last_img= bbTracker_.cur_frame;
                        rayState.type_detection= "cnn";
+                       rayState.final_bb[0] =  cv::Point2f(boundingBox.xmin, boundingBox.ymin);
+                       rayState.final_bb[1] = cv::Point2f(boundingBox.xmax, boundingBox.ymin);
+                       rayState.final_bb[2] =  cv::Point2f(boundingBox.xmin, boundingBox.ymax);
+                       rayState.final_bb[3] = cv::Point2f(boundingBox.xmax, boundingBox.ymax);
                        rayState.lock_proba = 0;
+                       rayState.class_ = boundingBox.Class;
+                       rayState.w_l = std::make_pair(width,  lenght);
+
 
 
                        //rayState.w_corner= {corner_init,corner_init,corner_init,corner_init};
@@ -849,7 +885,6 @@ void process()
             estimator.processImage(image, img_msg->header);
             bbTracker_.update_id(image); //match id and bboxState with no id yet
             bbTracker_.reproj(0.4);
-
 
             double whole_t = t_s.toc();
             printStatistics(estimator, whole_t);

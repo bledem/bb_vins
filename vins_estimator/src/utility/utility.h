@@ -230,6 +230,8 @@ template <typename T>
                double depth[4]={1.0,1.0,1.0,1.0};
 		cv::Point deduced_pixel[4]= {cv::Point(0,0)};
 		cv::Point undistort_pixel[4]= {cv::Point(0,0)};
+		cv::Point2f final_bb[4]= {cv::Point(0,0)};
+
                ray<T> r_tl, r_br;
                 Eigen::Vector3d  p_f_G_tl, p_f_G_br ;
 		Eigen::Vector3d w_corner[4]; //to initialize to 0
@@ -241,13 +243,14 @@ template <typename T>
  		std::pair<std::vector<Eigen::Vector3d>, Eigen::Vector3d> locked_bbox; //vec of the locked parallepiped
                 std::vector<Eigen::Matrix3d> rotations_vec;
                 std::vector<bbox<T>> pixel, un_pixel;
-
+		
+		std::pair<int,int> w_l;
              double time;
        //last YOLO detection values (not updated)
                bbox<T> prev_detection, cur_detection;
                int age, nb_detected; //for every new object
                float prev_time_detection;
-             std::string Class;
+             std::string class_;
                bool associated;
 		int lock_proba=0;
 		cv::Mat last_img;

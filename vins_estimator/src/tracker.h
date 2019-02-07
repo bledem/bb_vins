@@ -130,7 +130,6 @@ Utility::bbox<float> undistortPoint(Utility::bbox<float> tar_bbox);
 
    void update_pose(Eigen::Vector3d curr_pos_p,
                     Eigen::Quaterniond curr_pos_q, Eigen::Matrix3d R_imu_cam, Eigen::Vector3d p_C_I);
-   void shift_frame(cv::Mat cur_frame);
    float shift_bbox(Utility::bboxState<float>& bbox_state, cv::Mat new_frame );
    void shift_all(cv::Mat new_frame, cv::Mat &output_frame);
 
