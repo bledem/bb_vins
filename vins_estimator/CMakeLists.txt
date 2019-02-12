@@ -65,7 +65,11 @@ add_executable(vins_estimator
     src/non_max_supp/nms.cpp
     )
 
+add_executable(dummy_tracker
+	src/dummy_tracker.cpp
+)
+
 
 target_link_libraries(vins_estimator ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES}) 
-
+target_link_libraries(dummy_tracker ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES}) 
 

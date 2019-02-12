@@ -251,7 +251,7 @@ template <typename T>
                int age, nb_detected; //for every new object
                float prev_time_detection;
              std::string class_;
-               bool associated;
+               bool associated,locked_def;
 		int lock_proba=0;
 		cv::Mat last_img;
 		std::string type_detection; // cnn, optical, repro, matching

@@ -256,6 +256,7 @@ float calc_err(Eigen::Vector3d w_corner[4]){
 
 //we lock the box if more than three point
 void bbTracker_t::lock_bbox(){
+    cout<< "locked bbox "<<endl;
 
     //to draw the rectangle
     for (unsigned int k=0; k<bbox_State_vect.size(); k++) { //for each box
@@ -299,11 +300,16 @@ void bbTracker_t::lock_bbox(){
 
             //cout <<"Count is" << count <<"with value" << bbox_State_vect[k].avg[0]<< " "<< bbox_State_vect[k].avg[1]<< " " << bbox_State_vect[k].avg[2] <<endl;
          } else if (bbox_State_vect[k].lock_proba >=15) {
+             float err_temp = calc_err(bbox_State_vect[k].w_corner);
+             float err_def = calc_err(bbox_State_vect[k].locked_corner_def);
+
              for (unsigned int i=0; i<4; i++){
                  if (bbox_State_vect[k].w_corner[i][0] != 0.0)
                      vec_corner.push_back(bbox_State_vect[k].w_corner[i]);
-                 if (bbox_State_vect[k].lock_proba ==15)
+                 if (bbox_State_vect[k].lock_proba ==15 || err_def < err_temp)
                          bbox_State_vect[k].locked_corner_def[i] = bbox_State_vect[k].w_corner[i];
+                         bbox_State_vect[k].locked_def= true;
+
                  if (i<3)
                     avg_vec[i]=avg[i]/float(count);
 
@@ -318,15 +324,6 @@ void bbTracker_t::lock_bbox(){
                                 //));
 }
 
-
-             //we compare the update bbox_State_vect[k].w_corner[i] and the locked_corner_def[i]
-             float err_temp = calc_err(bbox_State_vect[k].w_corner);
-             float err_def = calc_err(bbox_State_vect[k].locked_corner_def);
-             if (err_temp < err_def){
-                 for (unsigned int i=0; i<4; i++){
-                 bbox_State_vect[k].locked_corner_def[i] = bbox_State_vect[k].w_corner[i];
-             }
-             }
 
          }
          } else if (count<=2 && bbox_State_vect[k].lock_proba>1) {
@@ -369,12 +366,37 @@ string type2str(int type) {
 
 
 void bbTracker_t::reproj(float thresh){
+
     for (unsigned k =0; k<bbox_State_vect.size(); k++){ // for each state
         Utility::bbox<float> predicted_bbox ;
-        project_world_to_pixel(bbox_State_vect[k].locked_corner, predicted_bbox);
+        cv::Point2f bbox_corner[4];
+        float err_def,err_temp;
+        if (bbox_State_vect[k].lock_proba>1){
+         err_temp = calc_err(bbox_State_vect[k].locked_corner);}
+        else{
+            return;
+        }
+        if (bbox_State_vect[k].locked_def){
+        err_def = calc_err(bbox_State_vect[k].locked_corner_def);
+        }else{
+             err_def= err_temp+1;
+        }
+        project_world_to_pixel(bbox_State_vect[k].locked_corner_def, predicted_bbox);
+        bbox_to_points_cv(predicted_bbox,bbox_corner );
+        cout <<"project on def" << bbox_corner << endl;
+        if(err_temp<=err_def){
+            project_world_to_pixel(bbox_State_vect[k].locked_corner, predicted_bbox);
+            cout<< "############################## We merge with reprojection with last locked! with thresh"<< thresh << endl;
+
+        }else{
+            project_world_to_pixel(bbox_State_vect[k].locked_corner_def, predicted_bbox);
+            cout<< "############################## We merge with reprojection! with def locked thresh"<< thresh << endl;
+
+        }
+
         bool iou_rslt= IOU(predicted_bbox,bbox_State_vect[k].cur_detection, thresh );
+
         if (iou_rslt){
-            cout<< "############################## We merge with reprojection!" << endl;
             float xmin, ymin, xmax, ymax;
             xmin = (bbox_State_vect[k].cur_detection.xmin + predicted_bbox.xmin)/2 ;
             xmax = (bbox_State_vect[k].cur_detection.xmax + predicted_bbox.xmax)/2 ;
@@ -406,7 +428,7 @@ float bbTracker_t::shift_bbox(Utility::bboxState<float>& bbox_state, cv::Mat new
     new_frame.convertTo(new_frame, CV_8UC1);
     prev_frame.convertTo(prev_frame, CV_8UC1);
     cvtColor(new_frame, new_frame, CV_BGR2GRAY);
-
+cout<<"before "<< endl;
    // string ty =  type2str( prev_frame.type() );
    // printf("Matrix: %s %dx%d \n", ty.c_str(), prev_frame.cols, prev_frame.rows );
    // string ty2 =  type2str( new_frame.type() );
@@ -414,13 +436,13 @@ float bbTracker_t::shift_bbox(Utility::bboxState<float>& bbox_state, cv::Mat new
     cv::imwrite( "/home/ubuntu/catkin_vins/src/VINS-Mono/new_frame.jpg", prev_frame );
     cv::imwrite( "/home/ubuntu/catkin_vins/src/VINS-Mono/prev.jpg", new_frame );
     vector<Point2f> old_features, new_feature;
-    goodFeaturesToTrack(prev_frame, old_features, 400, 0.6, 2, Mat(), 2);
+    //goodFeaturesToTrack(prev_frame, old_features, 400, 0.6, 2, Mat(), 2);
 
     if(bbox_state.age==0 && bbox_state.nb_detected>2){
-        old_features.push_back(cv::Point2f(bbox_state.cur_detection.xmin, bbox_state.cur_detection.ymin)); //tl
-        old_features.push_back(cv::Point2f(bbox_state.cur_detection.xmax, bbox_state.cur_detection.ymin)); //tr
-        old_features.push_back(cv::Point2f(bbox_state.cur_detection.xmin, bbox_state.cur_detection.ymax)); //bl
-        old_features.push_back(cv::Point2f(bbox_state.cur_detection.xmax, bbox_state.cur_detection.ymax)); //br
+//        old_features.push_back(cv::Point2f(bbox_state.cur_detection.xmin, bbox_state.cur_detection.ymin)); //tl
+//        old_features.push_back(cv::Point2f(bbox_state.cur_detection.xmax, bbox_state.cur_detection.ymin)); //tr
+//        old_features.push_back(cv::Point2f(bbox_state.cur_detection.xmin, bbox_state.cur_detection.ymax)); //bl
+//        old_features.push_back(cv::Point2f(bbox_state.cur_detection.xmax, bbox_state.cur_detection.ymax)); //br
         corners.push_back(cv::Point2f(bbox_state.cur_detection.xmin, bbox_state.cur_detection.ymin)); //tl
         corners.push_back(cv::Point2f(bbox_state.cur_detection.xmax, bbox_state.cur_detection.ymin)); //tr
         corners.push_back(cv::Point2f(bbox_state.cur_detection.xmin, bbox_state.cur_detection.ymax)); //bl
@@ -428,10 +450,10 @@ float bbTracker_t::shift_bbox(Utility::bboxState<float>& bbox_state, cv::Mat new
         bbox_state.prev_detection =  bbox_state.cur_detection;
 
     }else if ( bbox_state.nb_detected>2){
-    old_features.push_back(cv::Point2f(bbox_state.prev_detection.xmin, bbox_state.prev_detection.ymin));
-    old_features.push_back(cv::Point2f(bbox_state.prev_detection.xmax, bbox_state.prev_detection.ymin));
-    old_features.push_back(cv::Point2f(bbox_state.prev_detection.xmin, bbox_state.prev_detection.ymax));
-    old_features.push_back(cv::Point2f(bbox_state.prev_detection.xmax, bbox_state.prev_detection.ymax));
+//    old_features.push_back(cv::Point2f(bbox_state.prev_detection.xmin, bbox_state.prev_detection.ymin));
+//    old_features.push_back(cv::Point2f(bbox_state.prev_detection.xmax, bbox_state.prev_detection.ymin));
+//    old_features.push_back(cv::Point2f(bbox_state.prev_detection.xmin, bbox_state.prev_detection.ymax));
+//    old_features.push_back(cv::Point2f(bbox_state.prev_detection.xmax, bbox_state.prev_detection.ymax));
     corners.push_back(cv::Point2f(bbox_state.prev_detection.xmin, bbox_state.prev_detection.ymin));
     corners.push_back(cv::Point2f(bbox_state.prev_detection.xmax, bbox_state.prev_detection.ymin));
     corners.push_back(cv::Point2f(bbox_state.prev_detection.xmin, bbox_state.prev_detection.ymax));
@@ -443,18 +465,18 @@ float bbTracker_t::shift_bbox(Utility::bboxState<float>& bbox_state, cv::Mat new
     }
 
 
-cv::calcOpticalFlowPyrLK(prev_frame, new_frame, old_features, new_feature, status, err, cv::Size(21, 21), 3);
+cv::calcOpticalFlowPyrLK(prev_frame, new_frame, corners, corners_forw, status, err, cv::Size(21, 21), 3);
 
 cv::Mat img_flow=new_frame;
 //cout << "size of old feature" << old_features.size()  << " and new feature" << new_feature.size() << endl;
-for (unsigned int i =0; i<4; i++){
- cv::line( img_flow, old_features[i], new_feature[i],cv::Scalar(0,255,255));
- if (new_feature.size()>4){
-    corners_forw.push_back(new_feature[new_feature.size()-(4-i)]);
-}else{
-     return -1;
- }
-}
+//for (unsigned int i =0; i<4; i++){
+// cv::line( img_flow, corners[i], new_feature[i],cv::Scalar(0,255,255));
+// if (new_feature.size()>=4){
+//    corners_forw.push_back(new_feature[new_feature.size()-(4-i)]);
+//}else{
+//     return -1;
+// }
+//}
 
 cv::imwrite( "/home/ubuntu/catkin_vins/src/VINS-Mono/img_flow.jpg", img_flow );
 if (status[0] >0 && status[1] >0){
@@ -465,6 +487,8 @@ bbox_state.cur_detection.xmax = corners_forw[3].x;
 bbox_state.cur_detection.ymax = corners_forw[3].y;
 cout << "Optical flow to update the bbox " << bbox_state.bbox_id << endl;
 bbox_state.type_detection= "optical";
+cout<<"after "<< endl;
+
 return 0;
 } else if (matcher){
     cout << "Error in Optical FLow for bbox state id" << bbox_state.bbox_id << endl;
@@ -750,9 +774,9 @@ init_=true;
                 cout << "-------we erase bbox nb" << i << " and id" << bbox_State_vect[i].bbox_id <<"from bbox state" << endl;
 
                 bbox_State_vect.erase(bbox_State_vect.begin()+i);
-            }else if (bbox_State_vect[i].age >max_age_detection){
+             if (bbox_State_vect[i].age >max_age_detection){
                 cout <<"============= The locked bbox saved the detection beacause age is" <<bbox_State_vect[i].age << "and thresh is " << int(bbox_State_vect[i].lock_proba/max_age_detection) <<  endl;
-            }
+            }}
         }
             //std::cout << "the predicted bbox is " << frame_count <<"frame year old and contains"<< bbox_State_vect.size() << "boxes" << endl;
 
@@ -760,7 +784,23 @@ init_=true;
 }
 
 
+void bbTracker_t::nonMaxSupp(){
+    for (unsigned k=0; k<bbox_State_vect.size(); k++) {
+        for (unsigned i=k+1; i<bbox_State_vect.size(); i++) {
+                if(IOU(bbox_State_vect[k].cur_detection, bbox_State_vect[i].cur_detection, 0.4)){
+                    if (bbox_State_vect[k].nb_detected > bbox_State_vect[i].nb_detected){
+                        bbox_State_vect.erase(bbox_State_vect.begin()+i);
 
+                    }
+
+                }
+                if (i==k){
+                    return;
+                }
+        }
+    }
+
+                             }
 
 bbTracker_t::bbTracker_t()
 {

@@ -22,4 +22,5 @@
         <param name="skip_dis" type="double" value="0" />
     </node>
 
+<node name="dummy_tracker" pkg="vins_estimator" type="dummy_tracker" output="screen"/>
 </launch>

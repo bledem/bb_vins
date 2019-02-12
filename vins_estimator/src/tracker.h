@@ -147,6 +147,8 @@ Utility::bbox<float> undistortPoint(Utility::bbox<float> tar_bbox);
    void lock_bbox();
    void predict_missing(Eigen::Vector3d (& w_corner)[4], int missing, float avg_x);
    void reproj(float thresh);
+   void nonMaxSupp();
+
 
    //cv::Ptr<cv::Tracker> createTrackerByName() ;
 
