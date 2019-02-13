@@ -16,6 +16,9 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <image_transport/image_transport.h>
 #include <opencv2/tracking.hpp>
+#include <dlib/optimization/max_cost_assignment.h>
+#include <dlib/optimization.h>
+#include "utility/Hungarian.h"
 
 
 
@@ -60,6 +63,8 @@ double latest_time;
 Eigen::Vector3d tmp_P;
 Eigen::Quaterniond tmp_Q;
 Eigen::Vector3d tmp_V;
+Eigen::Vector3d tmp_V_delayed;
+
 Eigen::Vector3d tmp_Ba;
 Eigen::Vector3d tmp_Bg;
 Eigen::Vector3d acc_0;
@@ -125,6 +130,10 @@ void update()
     queue<sensor_msgs::ImuConstPtr> tmp_imu_buf = imu_buf;
     for (sensor_msgs::ImuConstPtr tmp_imu_msg; !tmp_imu_buf.empty(); tmp_imu_buf.pop())
         predict(tmp_imu_buf.front()); //propagate the IMU measurement
+
+    tmp_V_delayed = estimator.Vs[WINDOW_SIZE-2];
+
+
 
 }
 
@@ -538,7 +547,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     cv::Rect ROI(0, 100,passerelle.cols-100, passerelle.rows-100);
     cv::Mat passerelle_out = passerelle(ROI);
      cv::Point2f bbox_corner[4];
-     if (abs((tmp_V[0])<0.4 || abs(tmp_V[1])<0.4 || abs(tmp_V[2])<0.4) || (abs(tmp_V[0])>0.1 || abs(tmp_V[1])>0.1 || abs(tmp_V[2])>0.1))
+     if (abs((tmp_V[0])<0.05 && abs(tmp_V[1])<0.05 && abs(tmp_V[2])<0.05) ) //|| (abs(tmp_V[0])>0.01 || abs(tmp_V[1])>0.01 || abs(tmp_V[2])>0.01))
         bbTracker_.shift_all(passerelle_out, passerelle_out);
        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), sensor_msgs::image_encodings::BGR8, passerelle_out).toImageMsg();
        optical_image_pub_.publish(msg);
@@ -551,9 +560,14 @@ void img_display_callback(const sensor_msgs::ImageConstPtr &img_msg)
 
 
 void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_msgs::BoundingBoxesConstPtr &bboxes_ros){
-
+bool first=false;
  if (estimator.solver_flag != Estimator::SolverFlag::NON_LINEAR)
      return;
+ if (bbTracker_.bbox_State_vect.size()==0)
+     first=true;
+ std::vector< std::vector<double> > iou_cost;
+ vector<int> assignment, left;
+
 
     cout <<"RECEIVING " << bboxes_ros->bounding_boxes.size() << "bboxes" << endl; //print the full topic
 
@@ -588,11 +602,22 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
         Utility::bbox<float> predicted_bbox, predicted_bbox_def ;
         int added=0;
 
-        cv::Mat  iou_mat= cv::Mat::zeros(cv::Size(bboxes_ros->bounding_boxes.size(),bbTracker_.bbox_State_vect.size() ));
+        bool valid = true;
+//cv::Mat  iou_mat= cv::Mat::zeros(cv::Size(bboxes_ros->bounding_boxes.size(),bbTracker_.bbox_State_vect.size()),CV_64FC1 );
 
+
+        HungarianAlgorithm HungAlgo;
+        cout << "SPEED" << tmp_V.transpose() << "delayed" << tmp_V_delayed << endl;
+        if (abs(tmp_V_delayed[0])>0.1 ||abs(tmp_V_delayed[1])>0.1 ||abs(tmp_V_delayed[2])>0.1  ){
+           thresh_IOU = 0.1;
+        }
+        if (abs(tmp_V_delayed[0])>0.15 ||abs(tmp_V_delayed[1])>0.15 ||abs(tmp_V_delayed[2])>0.15  ){
+           valid = false;
+        }
         for (unsigned int i=0; i< bboxes_ros->bounding_boxes.size(); i++){
             //bbTracker_.img_w_= bboxes_ros->img_w;
             //bbTracker_.img_h_= bboxes_ros->img_h;
+
             Utility::bbox<float> boundingBox, un_bbox;
             if (bboxes_ros->bounding_boxes.at(i).ymin >100 && bboxes_ros->bounding_boxes.at(i).xmax<552){
 
@@ -610,7 +635,11 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
                // cout << "Wrong bounding box format, skipped" << endl;
             }
             bbTracker_.bb_state_.img_bboxes= bboxes;
+            cout <<"USING " << bboxes.list.size() << "bboxes" << endl; //print the full topic
 
+}} for (unsigned int i=0; i<bboxes.list.size(); i++){
+                Utility::bbox<float> boundingBox, un_bbox;
+                boundingBox = bboxes.list[i];
             bbTracker_.frame_count =0;
             un_bbox = bbTracker_.undistortPoint(boundingBox);
             int width = boundingBox.xmax-boundingBox.xmin;
@@ -622,22 +651,12 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
             //for every bounding box now detected
                   //for (int i=0; i<bboxes.list.size(); i++){
                         bool tracked = false;
-                        bool valid = true;
 
-                        cout << "SPEED" << tmp_V.transpose() << endl;
 
+            //cout <<"for bbox" << i <<endl;
                       //check if bbox is already tracked
+                      if (!first) {
                       for (unsigned j=0; j<bbTracker_.bbox_State_vect.size(); j++){ //check if really updating
-                          if (abs(tmp_V[0])>0.1 ||abs(tmp_V[1])>0.1 ||abs(tmp_V[2])>0.1  ){
-                             thresh_IOU = 0.1;
-                          }
-                          if (abs(tmp_V[0])>0.15 ||abs(tmp_V[1])>0.15 ||abs(tmp_V[2])>0.15  ){
-                             valid = false;
-                          }
-
-
-
-
 
                           bbTracker_.project_world_to_pixel(bbTracker_.bbox_State_vect[j].locked_corner, predicted_bbox);
                           bbTracker_.project_world_to_pixel(bbTracker_.bbox_State_vect[j].locked_corner_def, predicted_bbox_def);
@@ -645,28 +664,8 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
                 if(bbTracker_.IOU(boundingBox, bbTracker_.bbox_State_vect[j].cur_detection, thresh_IOU)
                         || bbTracker_.IOU(boundingBox, predicted_bbox, thresh_IOU)
                         || bbTracker_.IOU(boundingBox, predicted_bbox_def, thresh_IOU) ){
-                                bbTracker_.bbox_State_vect[j].prev_detection = bbTracker_.bbox_State_vect[j].cur_detection; //update already existing bbox
-                                bbTracker_.bbox_State_vect[j].cur_detection = boundingBox;
-                                bbTracker_.bbox_State_vect[j].age=0;
-                                bbTracker_.bbox_State_vect[j].nb_detected++;
-                                bbTracker_.bbox_State_vect[j].time = img_bboxes_time;
-                                bbTracker_.bbox_State_vect[j].associated = true;
-                                bbTracker_.bbox_State_vect[j].poses_vec.push_back(estimator.Ps[WINDOW_SIZE]);
-                                bbTracker_.bbox_State_vect[j].rotations_vec.push_back(estimator.Rs[WINDOW_SIZE]);
-                                bbTracker_.bbox_State_vect[j].pixel.push_back(boundingBox);
-                                bbTracker_.bbox_State_vect[j].un_pixel.push_back(un_bbox);
-                                bbTracker_.bbox_State_vect[j].last_img= bbTracker_.cur_frame;
-                                bbTracker_.bbox_State_vect[j].class_= boundingBox.Class;
-
-                                bbTracker_.bbox_State_vect[j].type_detection= "cnn";
-                                bbTracker_.bbox_State_vect[j].w_l = std::make_pair((int(bbTracker_.bbox_State_vect[j].w_l.first + width)/2), int((bbTracker_.bbox_State_vect[j].w_l.second + lenght)/2));
-                                bbTracker_.bbox_State_vect[j].final_bb[0] =  cv::Point2f(boundingBox.xmin, boundingBox.ymin);
-                                bbTracker_.bbox_State_vect[j].final_bb[1] = cv::Point2f(boundingBox.xmax, boundingBox.ymin);
-                                bbTracker_.bbox_State_vect[j].final_bb[2] =  cv::Point2f(boundingBox.xmin, boundingBox.ymax);
-                                bbTracker_.bbox_State_vect[j].final_bb[3] = cv::Point2f(boundingBox.xmax, boundingBox.ymax); //in order to preserve our tracking even with high speed movement
-
-
-                                //add the pose and the pixel values in the sliding window
+                                bbTracker_.update_bbox_state(j, img_bboxes_time, estimator.Ps[WINDOW_SIZE], estimator.Rs[WINDOW_SIZE], boundingBox,un_bbox);
+                   //add the pose and the pixel values in the sliding window
                                 tracked=true;
                                 cout << "tracked !! bbox_id is "<<bbTracker_.bbox_State_vect[j].bbox_id   <<" tracked for:"<<
                                         bbTracker_.bbox_State_vect[j].nb_detected<<" detection and its the bbox nb"<<j <<"in the vec  ,and corner id are:" << bbTracker_.bbox_State_vect[j].feature_id[0] << ", " << bbTracker_.bbox_State_vect[j].feature_id[1] << ", " << bbTracker_.bbox_State_vect[j].feature_id[2] <<
@@ -674,60 +673,113 @@ void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_
                                 break; //quit the comparaison with the previous bbox updated
 
                       }
-                       }
-                      thresh_IOU = 0.4; //threshback to normal
-                      //we dealt with all the previous saved bbox
-                       if((tracked==false || bbTracker_.bbox_State_vect.size() == 0) && valid){ //if the box has not been used for update we add as a new detection
+                       }  thresh_IOU = 0.4; //threshback to normal
 
-                       //Box never has been tracked we will augment the bboxState
-                       Utility::bboxState<float> rayState; //create a bbox state
-                       bbTracker_.project_pixel_to_world(rayState.r_tl ,rayState.r_br , boundingBox ); //init the ray
-                       rayState.bbox_id = bbTracker_.id_count;
-                       rayState.cur_detection = boundingBox;
-                       rayState.prev_detection = boundingBox;
-                       rayState.age=0;
-                       rayState.nb_detected=0;
-                       rayState.time= img_bboxes_time;
-                       bbTracker_.id_count++;
-                       rayState.associated = false;
-                       rayState.poses_vec.push_back(estimator.Ps[WINDOW_SIZE]);
-                       rayState.rotations_vec.push_back(estimator.Rs[WINDOW_SIZE]);
-                       rayState.pixel.push_back(boundingBox);
-                       rayState.un_pixel.push_back(un_bbox);
-                       rayState.last_img= bbTracker_.cur_frame;
-                       rayState.type_detection= "cnn";
-                       rayState.final_bb[0] =  cv::Point2f(boundingBox.xmin, boundingBox.ymin);
-                       rayState.final_bb[1] = cv::Point2f(boundingBox.xmax, boundingBox.ymin);
-                       rayState.final_bb[2] =  cv::Point2f(boundingBox.xmin, boundingBox.ymax);
-                       rayState.final_bb[3] = cv::Point2f(boundingBox.xmax, boundingBox.ymax);
-                       rayState.lock_proba = 0;
-                       rayState.locked_def= false;
-
-                       rayState.class_ = boundingBox.Class;
-                       rayState.w_l = std::make_pair(width,  lenght);
+                      }
+                      if (tracked==false) { //unmatched by first method
+                           left.push_back(i);
+                           //cout << "left add" << i << " is unmatched " <<endl;
+                      }
 
 
+           // std::vector<std::vector<double>> matrix(10, std::vector<double>(10, 0.0));
+                std::vector<double> temp;
+                for (unsigned j=0; j<bbTracker_.bbox_State_vect.size(); j++){ //check if really updating
+                    temp.push_back(bbTracker_.IOU_out(boundingBox, bbTracker_.bbox_State_vect[j].cur_detection, thresh_IOU));
+                    //cout << "bbox id " << bbTracker_.bbox_State_vect[j].bbox_id << " has with bbox" << i << " IOU=" <<  bbTracker_.IOU_out(boundingBox, bbTracker_.bbox_State_vect[j].cur_detection, thresh_IOU) << endl;
+    }
 
-                       //rayState.w_corner= {corner_init,corner_init,corner_init,corner_init};
-                        added++;
+                iou_cost.push_back(temp); //one elt is one bounding box
 
-                       //rayState.pixel.push_back(boundingBox);
-                       //add the firstpose and the pixel values in the sliding window
-                       bbTracker_.bbox_State_vect.push_back(rayState); //we push the
-
-            }
-}
 }
 
 //                  for (auto bbox_added : reserve){
 //                      bbTracker_.bbox_State_vect.push_back(bbox_added);
 //                  }
+            // To find out the best assignment of people to jobs we just need to call this function.
 
-                  cout << "After adding" <<  added<<", now we have" <<bbTracker_.bbox_State_vect.size() << "bounding boxes ";
+                if (iou_cost.size()>0){
+               double cost = HungAlgo.Solve(iou_cost, assignment);
+               for (unsigned int x = 0; x < iou_cost.size(); x++)
+                                if (assignment[x]>=0){
+                               std::cout << "bbox detect at index " << x << " is associated to tracker index " << assignment[x] <<" with tracker id "<< bbTracker_.bbox_State_vect[x].bbox_id << endl;
+                                } else {
+                                    //cout << "bbox detect  at index" << x << " assignment failed" << assignment[x] << endl;
+                                }
 
-                    for (unsigned j=0; j<bbTracker_.bbox_State_vect.size(); j++)
+        for (int j=0; j<bbTracker_.bbox_State_vect.size(); j++)
+        {
+            auto it = find(assignment.begin(),
+                              assignment.end(), j); //we associated this tracker to a box
+
+            if (it != assignment.end() && !(bbTracker_.bbox_State_vect[j].time == img_bboxes_time) && valid) //if this tracker has not been matched
+            {
+                int x = std::distance( assignment.begin(), it ); //we take the bbox index for this matched tracker
+                //cout << "unmatched tracker saved by Hungarian with bbox_id: " << bbTracker_.bbox_State_vect[j].bbox_id << "detec_id index is "<< x <<  endl;
+                bbTracker_.update_bbox_state(j, img_bboxes_time, estimator.Ps[WINDOW_SIZE], estimator.Rs[WINDOW_SIZE], bboxes.list[x], bbTracker_.undistortPoint(bboxes.list[x]));
+
+                auto it_left = find(left.begin(),
+                                  left.end(), x); //check if the x_index of the bbox has been saved in left
+                int x_left = std::distance( left.begin(), it_left ); //we take the bbox index for this matched tracker
+                if (left.size()> x_left){
+                //cout << "it_left value of the bbox at place "<< x_left <<" and left size is" << left.size() << endl;
+                left.erase(it_left);
+                }
+
+            }
+
+        }
+                }
+        for ( int i=0; i< left.size(); i++){
+
+        //we dealt with all the previous saved bbox
+         if( valid){ //if the box has not been used for update we add as a new detection
+
+         //Box never has been tracked we will augment the bboxState
+         Utility::bboxState<float> rayState; //create a bbox state
+         bbTracker_.project_pixel_to_world(rayState.r_tl ,rayState.r_br , bboxes.list[i] ); //init the ray
+         rayState.bbox_id = bbTracker_.id_count;
+         rayState.cur_detection = bboxes.list[i];
+         rayState.prev_detection = bboxes.list[i];
+         rayState.age=0;
+         rayState.nb_detected=0;
+         rayState.time= img_bboxes_time;
+         bbTracker_.id_count++;
+         rayState.associated = false;
+         rayState.poses_vec.push_back(estimator.Ps[WINDOW_SIZE]);
+         rayState.rotations_vec.push_back(estimator.Rs[WINDOW_SIZE]);
+         rayState.pixel.push_back(bboxes.list[i]);
+         rayState.un_pixel.push_back(bbTracker_.undistortPoint(bboxes.list[i]));
+         rayState.last_img= bbTracker_.cur_frame;
+         rayState.type_detection= "cnn";
+         rayState.final_bb[0] =  cv::Point2f(bboxes.list[i].xmin, bboxes.list[i].ymin);
+         rayState.final_bb[1] = cv::Point2f(bboxes.list[i].xmax, bboxes.list[i].ymin);
+         rayState.final_bb[2] =  cv::Point2f(bboxes.list[i].xmin, bboxes.list[i].ymax);
+         rayState.final_bb[3] = cv::Point2f(bboxes.list[i].xmax, bboxes.list[i].ymax);
+         rayState.lock_proba = 0;
+         rayState.locked_def= false;
+         int width = bboxes.list[i].xmax-bboxes.list[i].xmin;
+         int lenght = bboxes.list[i].ymax-bboxes.list[i].ymin;
+         rayState.class_ = bboxes.list[i].Class;
+         rayState.w_l = std::make_pair(width,  lenght);
+
+
+
+         //rayState.w_corner= {corner_init,corner_init,corner_init,corner_init};
+          added++;
+
+         //rayState.pixel.push_back(boundingBox);
+         //add the firstpose and the pixel values in the sliding window
+         bbTracker_.bbox_State_vect.push_back(rayState); //we push the
+
+}
+}
+               cout << "After adding" <<  added<<", now we have" <<bbTracker_.bbox_State_vect.size() << "bounding boxes ";
+
+//Dealing with unmatched tracker
+                    for (int j=0; j<bbTracker_.bbox_State_vect.size(); j++)
                     {
-                        cout << "with the id" << bbTracker_.bbox_State_vect[j].bbox_id << endl;
+
                         //they could not be updated then we can shift their values with optical flow only
                              if (!(bbTracker_.bbox_State_vect[j].time == img_bboxes_time) )
 

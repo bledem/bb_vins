@@ -120,6 +120,7 @@ public:
     std::vector<size_t> bbox_feature_id;
     std::vector<cv::Scalar> colors;
 
+    void update_bbox_state(int j,double img_bboxes_time, Eigen::Vector3d Ps, Eigen::Matrix3d Rs, Utility::bbox<float> boundingBox, Utility::bbox<float>un_bbox);
 
 //    void init(  Eigen::Vector3d curr_pos_p,
 //                Eigen::Quaterniond curr_pos_q,  Eigen::Matrix3d R_imu_cam, Eigen::Vector3d p_C_I);
@@ -132,6 +133,7 @@ Utility::bbox<float> undistortPoint(Utility::bbox<float> tar_bbox);
                     Eigen::Quaterniond curr_pos_q, Eigen::Matrix3d R_imu_cam, Eigen::Vector3d p_C_I);
    float shift_bbox(Utility::bboxState<float>& bbox_state, cv::Mat new_frame );
    void shift_all(cv::Mat new_frame, cv::Mat &output_frame);
+   double IOU_out(Utility::bbox<float> bboxes1, Utility::bbox<float> bboxes2, float thresh_args);
 
    void newBB(Utility::imgBboxes<float> img_bboxes);
    void project_pixel_to_world(  Utility::ray<float>& tl_ray, Utility::ray<float>& br_ray,

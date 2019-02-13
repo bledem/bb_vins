@@ -37,6 +37,21 @@ string trackerTypes[8] = {"BOOSTING", "MIL", "KCF", "TLD","MEDIANFLOW", "GOTURN"
 
  boundingBoxState_t::boundingBoxState_t(){}
 
+double bbTracker_t::IOU_out(Utility::bbox<float> bboxes1, Utility::bbox<float> bboxes2, float thresh_args){
+    float xx1, xx2, yy1,yy2, w,h, inter_area;
+    double o;
+ xx1 = std::max(bboxes1.xmin, bboxes2.xmin); //tl
+ yy1 = std::max(bboxes1.ymin, bboxes2.ymin);
+ xx2 = std::min(bboxes1.xmax, bboxes2.xmax); //br
+ yy2 = std::min(bboxes1.ymax, bboxes2.ymax);
+ w = std::max(float(0.0), xx2 - xx1);
+ h = std::max(float(0.0), yy2 - yy1);
+ inter_area = w*h; //inter area
+ float bb1_area = (bboxes1.xmax-bboxes1.xmin)*(bboxes1.ymax - bboxes1.ymin);
+ float bb2_area = (bboxes2.xmax - bboxes2.xmin)*(bboxes2.ymax - bboxes2.ymin );
+ o = inter_area / ((bb1_area + bb2_area)- inter_area);
+ return o;
+}
 
 bool bbTracker_t::IOU(Utility::bbox<float> bboxes1, Utility::bbox<float> bboxes2, float thresh_args){
     float xx1, xx2, yy1,yy2, w,h, inter_area;
@@ -94,6 +109,32 @@ Utility::bbox<float> bbTracker_t::undistortPoint(Utility::bbox<float> tar_bbox){
         return un_bbox;
 
     }
+
+void bbTracker_t::update_bbox_state(int j,double img_bboxes_time, Eigen::Vector3d Ps, Eigen::Matrix3d Rs, Utility::bbox<float> boundingBox, Utility::bbox<float>un_bbox){
+    float width = boundingBox.xmax-boundingBox.xmin;
+    float lenght = boundingBox.ymax-boundingBox.ymin;
+
+bbox_State_vect[j].prev_detection = bbox_State_vect[j].cur_detection; //update already existing bbox
+bbox_State_vect[j].cur_detection = boundingBox;
+bbox_State_vect[j].age=0;
+bbox_State_vect[j].nb_detected++;
+bbox_State_vect[j].time = img_bboxes_time;
+bbox_State_vect[j].associated = true;
+bbox_State_vect[j].poses_vec.push_back(Ps);
+bbox_State_vect[j].rotations_vec.push_back(Rs);
+bbox_State_vect[j].pixel.push_back(boundingBox);
+bbox_State_vect[j].un_pixel.push_back(un_bbox);
+bbox_State_vect[j].last_img= cur_frame;
+bbox_State_vect[j].class_= boundingBox.Class;
+
+bbox_State_vect[j].type_detection= "cnn";
+bbox_State_vect[j].w_l = std::make_pair((int(bbox_State_vect[j].w_l.first + width)/2), int((bbox_State_vect[j].w_l.second + lenght)/2));
+bbox_State_vect[j].final_bb[0] =  cv::Point2f(boundingBox.xmin, boundingBox.ymin);
+bbox_State_vect[j].final_bb[1] = cv::Point2f(boundingBox.xmax, boundingBox.ymin);
+bbox_State_vect[j].final_bb[2] =  cv::Point2f(boundingBox.xmin, boundingBox.ymax);
+bbox_State_vect[j].final_bb[3] = cv::Point2f(boundingBox.xmax, boundingBox.ymax); //in order to preserve our tracking even with high speed movement
+}
+
 
 
 //cv::undistort() is an approximate iterative algorithm that estimates the normalized original point coordinates
@@ -256,7 +297,6 @@ float calc_err(Eigen::Vector3d w_corner[4]){
 
 //we lock the box if more than three point
 void bbTracker_t::lock_bbox(){
-    cout<< "locked bbox "<<endl;
 
     //to draw the rectangle
     for (unsigned int k=0; k<bbox_State_vect.size(); k++) { //for each box
@@ -305,8 +345,11 @@ void bbTracker_t::lock_bbox(){
 
              for (unsigned int i=0; i<4; i++){
                  if (bbox_State_vect[k].w_corner[i][0] != 0.0)
+                     bbox_State_vect[k].locked_corner[i]=(bbox_State_vect[k].w_corner[i]);
+
                      vec_corner.push_back(bbox_State_vect[k].w_corner[i]);
                  if (bbox_State_vect[k].lock_proba ==15 || err_def < err_temp)
+                        cout << "UPDATING LOCKED DEF for state bbox_id" << bbox_State_vect[k].bbox_id <<endl;
                          bbox_State_vect[k].locked_corner_def[i] = bbox_State_vect[k].w_corner[i];
                          bbox_State_vect[k].locked_def= true;
 
@@ -383,14 +426,13 @@ void bbTracker_t::reproj(float thresh){
         }
         project_world_to_pixel(bbox_State_vect[k].locked_corner_def, predicted_bbox);
         bbox_to_points_cv(predicted_bbox,bbox_corner );
-        cout <<"project on def" << bbox_corner << endl;
         if(err_temp<=err_def){
             project_world_to_pixel(bbox_State_vect[k].locked_corner, predicted_bbox);
-            cout<< "############################## We merge with reprojection with last locked! with thresh"<< thresh << endl;
+            cout<< "############################## We merge with reprojection with last locked! with thresh"<< thresh << "error is" << err_temp << "better than" << err_def << endl;
 
         }else{
             project_world_to_pixel(bbox_State_vect[k].locked_corner_def, predicted_bbox);
-            cout<< "############################## We merge with reprojection! with def locked thresh"<< thresh << endl;
+            cout<< "############################## We merge with reprojection! with def locked thresh"<< thresh << "error is " << err_def <<"better than" <<err_temp << endl;
 
         }
 
@@ -479,7 +521,11 @@ cv::Mat img_flow=new_frame;
 //}
 
 cv::imwrite( "/home/ubuntu/catkin_vins/src/VINS-Mono/img_flow.jpg", img_flow );
-if (status[0] >0 && status[1] >0){
+float new_area = (corners_forw[3].x-corners_forw[0].x)*(corners_forw[3].y-corners_forw[0].y);
+float old_area = (corners[3].x-corners[0].x)*(corners[3].y-corners[0].y);
+float ratio = new_area/old_area;
+
+if (status[0] >0 && status[1] >0  && ratio<2 && ratio>= 0.5 ){
     bbox_state.prev_detection = bbox_state.cur_detection;
 bbox_state.cur_detection.xmin = corners_forw[0].x;
 bbox_state.cur_detection.ymin = corners_forw[0].y;
@@ -500,15 +546,23 @@ return 0;
     std::vector<KeyPoint> keypoints1, keypoints2;
     Mat descriptors1, descriptors2;
 
-    // Detect ORB features and compute descriptors.
-  Ptr<SURF> detector = SURF::create();
-    detector->setHessianThreshold(400);
+    // Detect SURF features and compute descriptors.
+  //Ptr<SURF> detector = SURF::create();
+  //FlannBasedMatcher matcher;
+    //matcher.match( descriptors1, descriptors2, matches );
+    //detector->setHessianThreshold(400);
+
+    //Detect ORB
+    Ptr<Feature2D> detector = ORB::create(400);
+    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
+
+
      detector->detectAndCompute(prev_frame, Mat(), keypoints1, descriptors1);
      detector->detectAndCompute(new_frame, Mat(), keypoints2, descriptors2);
     // Match features.
-     FlannBasedMatcher matcher;
      std::vector< DMatch > matches;
-  matcher.match( descriptors1, descriptors2, matches );
+     matcher->match(descriptors1, descriptors2, matches, Mat());
+
     // Sort matches by score
     std::sort(matches.begin(), matches.end());
 
@@ -578,7 +632,7 @@ void bbTracker_t::shift_all(cv::Mat new_frame, cv::Mat &output_frame){ //shift t
 }else{
         bbox_to_points_cv(bbox_State_vect[k].prev_detection, bbox_corner );
         }
-     //bbTracker_.bbox_to_points_cv(bbTracker_.bbox_State_vect[i].cur_detection, bbox_corner );
+     //bbox_to_points_cv(bbox_State_vect[i].cur_detection, bbox_corner );
        // cout << "debug in shift bbox_corner[0]" << bbox_corner[0] << "  bbox_corner[0]" << bbox_corner[0] << endl;
         //if ( bbox_corner[0].x <= bbox_corner[3].x && bbox_corner[0].y <= bbox_corner[3].y){
 
