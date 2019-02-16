@@ -354,11 +354,9 @@ void bbTracker_t::lock_bbox(){
                          bbox_State_vect[k].locked_def= true;}
                  if (i<3)
                     avg_vec[i]=avg[i]/float(count);
-                 cout <<"debug1" << endl;
 
 
                  bbox_State_vect[k].locked_bbox= ( std::make_pair(vec_corner, avg_vec));
-                 cout <<"debug2" << endl;
 
             //cv::Ptr<cv::TrackerKCF> tracker = cv::TrackerKCF::create();
 //cout <<"before multritracker add" << endl;

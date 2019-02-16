@@ -274,50 +274,50 @@ if (bbTracker_.bbox_State_vect[i].lock_proba >= 15){
                 fail=true;
                 break;
             }}
-        if (!fail){
+//        if (!fail){
 
-            cout << "CHECK if exist We publish the point corner tl of  " <<bbTracker_.bbox_State_vect[i].w_corner[0].transpose() << "and br world point" << bbTracker_.bbox_State_vect[i].w_corner[3].transpose() << endl;
-            line_list.markers[i].type = visualization_msgs::Marker::LINE_STRIP;
-            line_list.markers[i].id = i;
-            line_list.markers[i].scale.x = 0.1;
-            line_list.markers[i].header.frame_id = "world";
-            line_list.markers[i].header.stamp = ros::Time::now();
-            line_list.markers[i].ns = "my lines_" ;
-            line_list.markers[i].action = visualization_msgs::Marker::ADD;
-            line_list.markers[i].pose.orientation.w = 1.0;
-        line_list.markers[i].color.b = 1.0;
-        line_list.markers[i].color.r = 1.0;
-        line_list.markers[i].color.g = 1.0;
-        line_list.markers[i].color.a = 1.0;
-       // raytl.color.b = 1.0;
-        raytl.x =bbTracker_.bbox_State_vect[i].w_corner[0][0];
-        raytl.y =bbTracker_.bbox_State_vect[i].w_corner[0][1];
-        raytl.z =bbTracker_.bbox_State_vect[i].w_corner[0][2];
-        line_list.markers[i].points.push_back(ray0);
+//            cout << "CHECK if exist We publish the point corner tl of  " <<bbTracker_.bbox_State_vect[i].w_corner[0].transpose() << "and br world point" << bbTracker_.bbox_State_vect[i].w_corner[3].transpose() << endl;
+//            line_list.markers[i].type = visualization_msgs::Marker::LINE_STRIP;
+//            line_list.markers[i].id = i;
+//            line_list.markers[i].scale.x = 0.1;
+//            line_list.markers[i].header.frame_id = "world";
+//            line_list.markers[i].header.stamp = ros::Time::now();
+//            line_list.markers[i].ns = "my lines_" ;
+//            line_list.markers[i].action = visualization_msgs::Marker::ADD;
+//            line_list.markers[i].pose.orientation.w = 1.0;
+//        line_list.markers[i].color.b = 1.0;
+//        line_list.markers[i].color.r = 1.0;
+//        line_list.markers[i].color.g = 1.0;
+//        line_list.markers[i].color.a = 1.0;
+//       // raytl.color.b = 1.0;
+//        raytl.x =bbTracker_.bbox_State_vect[i].w_corner[0][0];
+//        raytl.y =bbTracker_.bbox_State_vect[i].w_corner[0][1];
+//        raytl.z =bbTracker_.bbox_State_vect[i].w_corner[0][2];
+//        line_list.markers[i].points.push_back(ray0);
 
-          line_list.markers[i].points.push_back(raytl);
-          marker_pub.publish(line_list);
-        }
-          fail=false;
-          for (int test=0; test<3; test++){
-              if(bbTracker_.bbox_State_vect[i].w_corner[3][test] !=bbTracker_.bbox_State_vect[i].w_corner[3][test] ){
-                  fail=true;
-                  break;
-              }}
+//          line_list.markers[i].points.push_back(raytl);
+//          marker_pub.publish(line_list);
+//        }
+//          fail=false;
+//          for (int test=0; test<3; test++){
+//              if(bbTracker_.bbox_State_vect[i].w_corner[3][test] !=bbTracker_.bbox_State_vect[i].w_corner[3][test] ){
+//                  fail=true;
+//                  break;
+//              }}
 
-          if (!fail){
-          line_list.markers[i].color.b = 1.0;
-          line_list.markers[i].color.r = 0.0;
-          line_list.markers[i].color.g = 0.0;
-          line_list.markers[i].color.a = 1.0;
-          raybr.x =bbTracker_.bbox_State_vect[i].w_corner[3][0];
-          raybr.y =bbTracker_.bbox_State_vect[i].w_corner[3][1];
-          raybr.z =bbTracker_.bbox_State_vect[i].w_corner[3][2];
-          line_list.markers[i].points.push_back(ray0);
-          line_list.markers[i].points.push_back(raybr);
+//          if (!fail){
+//          line_list.markers[i].color.b = 1.0;
+//          line_list.markers[i].color.r = 0.0;
+//          line_list.markers[i].color.g = 0.0;
+//          line_list.markers[i].color.a = 1.0;
+//          raybr.x =bbTracker_.bbox_State_vect[i].w_corner[3][0];
+//          raybr.y =bbTracker_.bbox_State_vect[i].w_corner[3][1];
+//          raybr.z =bbTracker_.bbox_State_vect[i].w_corner[3][2];
+//          line_list.markers[i].points.push_back(ray0);
+//          line_list.markers[i].points.push_back(raybr);
 
-        marker_pub.publish(line_list);
-}
+//        marker_pub.publish(line_list);
+//}
           //else {
 
 //              line_list.markers[i].points.clear();
@@ -400,11 +400,12 @@ void publish_extra(const ros::Time& publish_time)
     bool show_YOLO=true;
     bool show_locked=false;
     bool show_w_corner=false;
+    //cout << "SPEED" << tmp_V.transpose() <<  endl;
 
   //if(track_image_pub_.getNumSubscribers() > 0){
     display_all = cv_bridge::cvtColor(display_all, sensor_msgs::image_encodings::BGR8);
-    cv::Rect ROI(0, 100,display_all->image.cols-100, display_all->image.rows-100);
-    cv::Mat image = display_all->image(ROI);
+    //cv::Rect ROI(0, 100,display_all->image.cols-100, display_all->image.rows-100);
+    cv::Mat image = display_all->image;
     sensor_msgs::PointCloud point_cloud;
     point_cloud.header.frame_id = "world";
     point_cloud.header.stamp = ros::Time::now();
@@ -425,7 +426,7 @@ void publish_extra(const ros::Time& publish_time)
 
 
 }
-        ROS_INFO_STREAM("Drawing" << bbTracker_.bbox_State_vect.size()<< "bounding boxes");
+        //ROS_INFO_STREAM("Drawing" << bbTracker_.bbox_State_vect.size()<< "bounding boxes");
 
     for (int i=0; i<bbTracker_.bbox_State_vect.size(); i++){
 
@@ -471,18 +472,23 @@ if (abs(tmp_V[0])>0.3 || abs(tmp_V[1])>0.3 || abs(tmp_V[2])>0.3)
             cv::rectangle(image, bbTracker_.bbox_State_vect[i].final_bb[0], bbTracker_.bbox_State_vect[i].final_bb[3],cv::Scalar(255, 255, 255), 2, 8, 0) ;
             cout << "%%%%%%%%%% From cur detection" << bbTracker_.bbox_State_vect[i].final_bb[0] << bbTracker_.bbox_State_vect[i].final_bb[1] << bbTracker_.bbox_State_vect[i].final_bb[2] << "with widt/lenght" <<
                    bbTracker_.bbox_State_vect[i].w_l.first/2 << " "<<bbTracker_.bbox_State_vect[i].w_l.second/2 <<  endl;
+            cout << "debug cur detec after0" << endl;
+
         }else{
+            cout << "debug cur detec bef" << endl;
+
             bbTracker_.bbox_to_points_cv(bbTracker_.bbox_State_vect[i].cur_detection, bbox_corner ); //deduced corner takes the bbox_state.w_corner[0] and project them in the current cam_image frame
             cv::rectangle(image, bbox_corner[0], bbox_corner[3],cv::Scalar(255, 255, 255), 2, 8, 0) ;
+            cout << "debug cur detec after" << endl;
 
         }
 
 
         //DEDUCED FROM LOCKED IN WHITE
 
-       putText(image, bbTracker_.bbox_State_vect[i].type_detection, Point2f(100+(20*i),100+(20*i)), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
+       putText(image, bbTracker_.bbox_State_vect[i].type_detection, Point2f(100+(20*i),100+(20*i)), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,0,0,0), 2 );
        putText(image, std::to_string(bbTracker_.bbox_State_vect[i].bbox_id), Point2f(100,300+(30*i)), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
-       putText(image, bbTracker_.bbox_State_vect[i].class_, Point2f(300,300+(30*i)), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
+       putText(image, bbTracker_.bbox_State_vect[i].class_, Point2f(300,300+(30*i)), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,0,0,0), 2 );
 
        putText(image, "V_x=" + std::to_string(tmp_V[0]), Point2f(400,100), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
        putText(image, "V_y=" + std::to_string(tmp_V[1]), Point2f(400,200), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
@@ -544,12 +550,12 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 
         //bbTracker_.shift_frame(out_img->image); //shift the detected points from prev_frame
     cv::Mat passerelle = optical_result_bridge->image;
-    cv::Rect ROI(0, 100,passerelle.cols-100, passerelle.rows-100);
-    cv::Mat passerelle_out = passerelle(ROI);
+    //cv::Rect ROI(0, 100,passerelle.cols-100, passerelle.rows-100);
+    //cv::Mat passerelle_out = passerelle(ROI);
      cv::Point2f bbox_corner[4];
      if (abs((tmp_V[0])<0.05 && abs(tmp_V[1])<0.05 && abs(tmp_V[2])<0.05) ) //|| (abs(tmp_V[0])>0.01 || abs(tmp_V[1])>0.01 || abs(tmp_V[2])>0.01))
-        bbTracker_.shift_all(passerelle_out, passerelle_out);
-       sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), sensor_msgs::image_encodings::BGR8, passerelle_out).toImageMsg();
+        bbTracker_.shift_all(passerelle, passerelle);
+       sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), sensor_msgs::image_encodings::BGR8, passerelle).toImageMsg();
        optical_image_pub_.publish(msg);
 }
 
@@ -585,8 +591,8 @@ bool first=false;
         }else{
             out_img = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
         }
-        cv::Rect ROI(0, 100,out_img->image.cols-100, out_img->image.rows-100);
-        bbTracker_.cur_frame = out_img->image(ROI);
+       // cv::Rect ROI(0, 100,out_img->image.cols-100, out_img->image.rows-100);
+        bbTracker_.cur_frame = out_img->image;
 
 
 
@@ -619,15 +625,14 @@ bool first=false;
             //bbTracker_.img_h_= bboxes_ros->img_h;
 
             Utility::bbox<float> boundingBox, un_bbox;
-            if (bboxes_ros->bounding_boxes.at(i).ymin >100 && bboxes_ros->bounding_boxes.at(i).xmax<552){
-
             try{
+
             boundingBox.Class = bboxes_ros->bounding_boxes.at(i).Class ;
             boundingBox.prob  = bboxes_ros->bounding_boxes.at(i).probability ;
             boundingBox.xmin  = bboxes_ros->bounding_boxes.at(i).xmin ;
-            boundingBox.ymin = bboxes_ros->bounding_boxes.at(i).ymin-100 ;
+            boundingBox.ymin = bboxes_ros->bounding_boxes.at(i).ymin ;
             boundingBox.xmax  = bboxes_ros->bounding_boxes.at(i).xmax ;
-            boundingBox.ymax  = bboxes_ros->bounding_boxes.at(i).ymax-100 ;
+            boundingBox.ymax  = bboxes_ros->bounding_boxes.at(i).ymax ;
             bboxes.list.push_back(boundingBox);
 
              // ROS_INFO_STREAM("Size of bounding box " << boundingBox.xmin <<","<< boundingBox.ymin );
@@ -635,10 +640,8 @@ bool first=false;
                // cout << "Wrong bounding box format, skipped" << endl;
             }
             bbTracker_.bb_state_.img_bboxes= bboxes;
-            cout <<"USING " << bboxes.list.size() << "bboxes" << endl; //print the full topic
-
-}} for (unsigned int i=0; i<bboxes.list.size(); i++){
-                Utility::bbox<float> boundingBox, un_bbox;
+            if (boundingBox.Class != "chair")
+                return;
                 boundingBox = bboxes.list[i];
             bbTracker_.frame_count =0;
             un_bbox = bbTracker_.undistortPoint(boundingBox);
@@ -653,7 +656,7 @@ bool first=false;
                         bool tracked = false;
 
 
-            //cout <<"for bbox" << i <<endl;
+            cout <<"for bbox" << i <<endl;
                       //check if bbox is already tracked
                       if (!first) {
                       for (unsigned j=0; j<bbTracker_.bbox_State_vect.size(); j++){ //check if really updating
@@ -756,6 +759,8 @@ bool first=false;
          rayState.final_bb[1] = cv::Point2f(bboxes.list[i].xmax, bboxes.list[i].ymin);
          rayState.final_bb[2] =  cv::Point2f(bboxes.list[i].xmin, bboxes.list[i].ymax);
          rayState.final_bb[3] = cv::Point2f(bboxes.list[i].xmax, bboxes.list[i].ymax);
+         for (int c=0; c<4;c++)
+            rayState.w_corner[c]= (Eigen::Vector3d(0.0, 0.0, 0.0));
          rayState.lock_proba = 0;
          rayState.locked_def= false;
          int width = bboxes.list[i].xmax-bboxes.list[i].xmin;
@@ -977,7 +982,7 @@ void process()
             pubPointCloud(estimator, header);
             pubTF(estimator, header);
             pubKeyframe(estimator);
-            publish_rviz(img_msg->header.stamp);
+            //publish_rviz(img_msg->header.stamp);
             publish_extra(img_msg->header.stamp);
             if (relo_msg != NULL)
                 pubRelocalization(estimator);
@@ -1048,9 +1053,11 @@ void process()
 
 int main(int argc, char **argv)
 {
+
     ros::init(argc, argv, "vins_estimator");
     ros::NodeHandle n("~");
    // image_transport::ImageTransport it(n);
+
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     readParameters(n);
     std::string config_file;
