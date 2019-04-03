@@ -3,6 +3,8 @@
 
 So far this program only works on gazebo simulated world.
 
+Coded for this paper https://hal.archives-ouvertes.fr/hal-02063181
+
 # VINS-Mono 
 VINS-Mono is a real-time SLAM framework for **Monocular Visual-Inertial Systems**. It uses an optimization-based sliding window formulation for providing high-accuracy visual-inertial odometry. It features efficient IMU pre-integration with bias correction, automatic estimator initialization, online extrinsic calibration, failure detection and recovery, loop detection, and global pose graph optimization, map merge, pose graph reuse, online temporal calibration, rolling shutter support. VINS-Mono is primarily designed for state estimation and feedback control of autonomous drones, but it is also capable of providing accurate localization for AR applications. This code runs on **Linux**, and is fully integrated with **ROS**. For **iOS** mobile implementation, please go to [VINS-Mobile](https://github.com/HKUST-Aerial-Robotics/VINS-Mobile).
 
@@ -18,4 +20,3 @@ The source code is released under [GPLv3](http://www.gnu.org/licenses/) license.
 
 We are still working on improving the code reliability. For any technical issues, please contact Tong QIN <tong.qinATconnect.ust.hk> or Peiliang LI <pliapATconnect.ust.hk>.
 
-For commercial inquiries, please contact Shaojie SHEN <eeshaojieATust.hk>
