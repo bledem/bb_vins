@@ -35,8 +35,8 @@
 
 Estimator estimator;
 bbTracker_t bbTracker_;
-visualization_msgs::MarkerArray cube_list, line_list;
-ros::Publisher marker_pub, track_image_pub_, cube_pub, optical_image_pub_ ;
+visualization_msgs::MarkerArray cube_list, temp_cube_list, line_list;
+ros::Publisher marker_pub, track_image_pub_, cube_pub, temp_cube_pub, optical_image_pub_ ;
 ros::Publisher pub_corner_point;
 Utility::all_locked_box locked_box_vec;
 double yolo_img_time, yolo_bbox_time, img_time;
@@ -68,9 +68,13 @@ Eigen::Vector3d tmp_V_delayed;
 Eigen::Vector3d tmp_Ba;
 Eigen::Vector3d tmp_Bg;
 Eigen::Vector3d acc_0;
+Eigen::Vector3d un_acc_prev, un_acc_nxt ;
 Eigen::Vector3d gyr_0;
+int acc_delay=0;
 bool init_feature = 0;
 bool init_imu = 1;
+bool speed_peak=false;
+bool deccel = false;
 double last_imu_t = 0;
 
 //args: IMU , out: tmp_P, tmp_V, acc_0, gyr_0 (linear accel, angular velocity)
@@ -110,6 +114,8 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
 
     acc_0 = linear_acceleration;
     gyr_0 = angular_velocity;
+    un_acc_prev = un_acc;
+    acc_delay++;
 }
 
 //propagate all IMU measurements contained in imu_buf
@@ -126,6 +132,8 @@ void update()
     tmp_Bg = estimator.Bgs[WINDOW_SIZE];
     acc_0 = estimator.acc_0;
     gyr_0 = estimator.gyr_0;
+
+
 
     queue<sensor_msgs::ImuConstPtr> tmp_imu_buf = imu_buf;
     for (sensor_msgs::ImuConstPtr tmp_imu_msg; !tmp_imu_buf.empty(); tmp_imu_buf.pop())
@@ -223,45 +231,12 @@ void publish_rviz(const ros::Time& publish_time){
 bool new_vec=false;
 
    for (unsigned i =0; i<bbTracker_.bbox_State_vect.size(); i++){ // for each state
-//cout << "locked proba" << bbTracker_.bbox_State_vect[i].lock_proba << endl;
-//we transfer the locked vectors to the global vec
-       //for (int p=0; p<bbTracker_.bbox_State_vect[i].locked_vec.size(); p++){ //for all the new locked vector of this state
-if (bbTracker_.bbox_State_vect[i].lock_proba >= 15){
-           if (locked_box_vec.bbox_id_vec.size()>0){
-            auto it = find(locked_box_vec.bbox_id_vec.begin(), locked_box_vec.bbox_id_vec.end(), (bbTracker_.bbox_State_vect[i].bbox_id));
-            new_vec=(it == locked_box_vec.bbox_id_vec.end());
-           }else if (locked_box_vec.bbox_id_vec.size()==0) {
-               new_vec=true;
 
-           }
-           if  (new_vec && bbTracker_.bbox_State_vect[i].nb_detected>5 ) { //if we never locked this bbox state
-           Utility::locked_box bbox;
-           bbox.bbox_id = bbTracker_.bbox_State_vect[i].bbox_id;
-           bbox.center = bbTracker_.bbox_State_vect[i].locked_bbox.second;
-           cout << "Add locked box in rviz publisher with center" <<  bbox.center.transpose() << " and locked size is "<< locked_box_vec.bbox_id_vec.size()<< endl;
-            //add width lenght and corners
-           locked_box_vec.bbox_id_vec.push_back(bbTracker_.bbox_State_vect[i].bbox_id);
-            locked_box_vec.locked_boxes.push_back(bbox);
-           cout << "Add locked bbox with" <<  bbox.bbox_id <<  endl;
-
-      } else if (locked_box_vec.bbox_id_vec.size()>0) { //we update this locked box (if 4 corner instead of three?
-           Utility::locked_box bbox;
-           bbox.bbox_id = bbTracker_.bbox_State_vect[i].bbox_id;
-           auto it = find(locked_box_vec.bbox_id_vec.begin(), locked_box_vec.bbox_id_vec.end(), (bbTracker_.bbox_State_vect[i].bbox_id));
-
-           //cout <<"CHECK if index is fitting. For "<<bbTracker_.bbox_State_vect[i].bbox_id << "is situated in " << index << "position of this vector" <<locked_box_vec.bbox_id_vec << endl;
-           int index = std::distance( locked_box_vec.bbox_id_vec.begin(), it ); //index is the index of the locked box with this id
-
-           bbox.center = bbTracker_.bbox_State_vect[i].locked_bbox.second;
-           locked_box_vec.locked_boxes[index] = bbox;
-           locked_box_vec.count =0;
-           //cout << "Update locked_bbox vec with bbox id " <<  bbox.bbox_id <<  endl;
-
-       }}
-       //}
+  //     }
 
           // cout << "DEBUG marker" << cube_list.markers.size() << "and locked vec "<< locked_box_vec.bbox_id_vec.size() <<endl;
-       cube_list.markers.resize(locked_box_vec.bbox_id_vec.size()*2); //suspicious
+       cube_list.markers.resize(bbTracker_.bbox_State_vect.size()); //suspicious
+       temp_cube_list.markers.resize(bbTracker_.bbox_State_vect.size()); //suspicious
 
 
         geometry_msgs::Point raytl, raybr;
@@ -325,10 +300,13 @@ if (bbTracker_.bbox_State_vect[i].lock_proba >= 15){
 
 
 
- //  int count = locked_box_vec.count;
-  //  for (int i=count; i<locked_box_vec.bbox_id_vec.size(); i++){ //from the last time to the end
-    //cout<< "-------------- publishing " << i << "th box on" <<  locked_box_vec.bbox_id_vec.size() << "on id nb" << count << " "
-       // << i <<  endl;
+
+//    cout<< "-------------- publishing " << i << "th box on" <<  bbTracker_.bbox_State_vect.size() <<
+//           "def lock state is " << bbTracker_.bbox_State_vect[i].locked_def << endl;
+   std::array<float,3> visitor_size={0.1, 0.7, 2};
+   std::array<float,3> chair_size={0.1, 0.7, 1}; //x is cube_deepness, y is cube_y, z is cube_x
+   std::array<float,3> choice;
+
    if (bbTracker_.bbox_State_vect[i].locked_def== true){
                cube_list.markers[i].header.frame_id = "world";
                cube_list.markers[i].header.stamp = ros::Time::now();
@@ -339,11 +317,20 @@ if (bbTracker_.bbox_State_vect[i].lock_proba >= 15){
 
                cube_list.markers[i].type = visualization_msgs::Marker::CUBE;
                cube_list.markers[i].action = visualization_msgs::Marker::ADD;
-
+                float x_lenght=(bbTracker_.bbox_State_vect[i].locked_corner_def[0][0]+bbTracker_.bbox_State_vect[i].locked_corner_def[3][0]);
+                float y_lenght= bbTracker_.bbox_State_vect[i].locked_corner_def[0][1]+bbTracker_.bbox_State_vect[i].locked_corner_def[3][1];
+                float z_lenght= bbTracker_.bbox_State_vect[i].locked_corner_def[0][2]+bbTracker_.bbox_State_vect[i].locked_corner_def[3][2];
+                //cout << "check lenght x, y, z" << x_lenght << " " << y_lenght << " " << z_lenght << endl;
                // Set the scale of the marker -- 1x1x1 here means 1m on a side
-               cube_list.markers[i].scale.x = 0.1;
-               cube_list.markers[i].scale.y = 0.7;
-               cube_list.markers[i].scale.z = 2;
+
+                if (bbTracker_.bbox_State_vect[i].class_ == "visitor"){
+                    choice = visitor_size;
+                }else{
+                    choice = chair_size;
+                }
+               cube_list.markers[i].scale.x = choice[0];
+               cube_list.markers[i].scale.y = choice[1];
+               cube_list.markers[i].scale.z = choice[2];
 
                // Set the color -- be sure to set alpha to something non-zero!
                cube_list.markers[i].color.r = 0.0f;
@@ -356,38 +343,48 @@ if (bbTracker_.bbox_State_vect[i].lock_proba >= 15){
                cube_list.markers[i].pose.orientation.w = 1.0;
 
 
-           cube_list.markers[i].pose.position.x = (bbTracker_.bbox_State_vect[i].locked_corner_def[0][0]+bbTracker_.bbox_State_vect[i].locked_corner_def[3][0])/2; //locked_box_vec.locked_boxes has size
-           cube_list.markers[i].pose.position.y = (bbTracker_.bbox_State_vect[i].locked_corner_def[0][1]+bbTracker_.bbox_State_vect[i].locked_corner_def[3][1])/2;
-           cube_list.markers[i].pose.position.z = (bbTracker_.bbox_State_vect[i].locked_corner_def[0][2]+bbTracker_.bbox_State_vect[i].locked_corner_def[3][2])/2;
-           //cout << "for marker"<< i << "we publish" << cube_list.markers[i].pose.position << endl;
-           cube_list.markers[i+1].color.r = 1.0f;
-           cube_list.markers[i+1].color.g = 0.0f;
-           cube_list.markers[i+1].color.b = 0.0f;
-           cube_list.markers[i+1].color.a = 1.0;
-           cube_list.markers[i+1].pose.position.x = locked_box_vec.locked_boxes[i].center[0]; //locked_box_vec.locked_boxes has size
-            cube_list.markers[i+1].pose.position.y = locked_box_vec.locked_boxes[i].center[1];
-           cube_list.markers[i+1].pose.position.z = locked_box_vec.locked_boxes[i].center[2];
+           cube_list.markers[i].pose.position.x = x_lenght/2; //locked_box_vec.locked_boxes has size
+           cube_list.markers[i].pose.position.y = y_lenght/2;
+           cube_list.markers[i].pose.position.z = z_lenght/2;
+           //cout << "for marker"<< i << "we publish" << cube_list.markers[i].pose.position << "end" << endl;
+           temp_cube_list.markers[i].header.frame_id = "world";
+           temp_cube_list.markers[i].header.stamp = ros::Time::now();
+           temp_cube_list.markers[i].ns = "my temp bbox" ; //namspace
+           temp_cube_list.markers[i].id = i ;
+\
+           temp_cube_list.markers[i].pose.orientation.w = 1.0;
 
-           locked_box_vec.count++;
+           temp_cube_list.markers[i].type = visualization_msgs::Marker::CUBE;
+           temp_cube_list.markers[i].action = visualization_msgs::Marker::ADD;
+
+           // Set the scale of the marker -- 1x1x1 here means 1m on a side
+           temp_cube_list.markers[i].scale = cube_list.markers[i].scale;
+
+           temp_cube_list.markers[i].color.r = 1.0f;
+           temp_cube_list.markers[i].color.g = 0.0f;
+           temp_cube_list.markers[i].color.b = 0.0f;
+           temp_cube_list.markers[i].color.a = 1.0;
+           temp_cube_list.markers[i].pose.position.x = (bbTracker_.bbox_State_vect[i].locked_corner[0][0]+bbTracker_.bbox_State_vect[i].locked_corner[3][0])/2;
+            temp_cube_list.markers[i].pose.position.y = (bbTracker_.bbox_State_vect[i].locked_corner[0][1]+bbTracker_.bbox_State_vect[i].locked_corner[3][1])/2;
+           temp_cube_list.markers[i].pose.position.z = (bbTracker_.bbox_State_vect[i].locked_corner[0][2]+bbTracker_.bbox_State_vect[i].locked_corner[3][2])/2;
    //}
-
            cube_pub.publish(cube_list);
+           temp_cube_pub.publish(temp_cube_list);
 }
-           if (locked_box_vec.locked_boxes.size()>10){
-            locked_box_vec.count =0;
-            locked_box_vec.locked_boxes.clear();
-            locked_box_vec.bbox_id_vec.clear();
-           }
+
    }
+//   }else{
+//     cout << "no bounding box, delete the rays" << endl;
+//   //   line_list.markers[i].action = visualization_msgs::Marker::DELETE;
+//   //   line_list.markers[i].points.clear();
+//       for (unsigned i =0; i<bbTracker_.bbox_State_vect.size(); i++)
+//      temp_cube_list.markers[i].points.clear();
+//      temp_cube_pub.publish(cube_list);
+//   //   marker_pub.publish(line_list);
+//   }
 }
 }
-//}else{
- // cout << "no bounding box, delete the rays" << endl;
-//   line_list.markers[i].action = visualization_msgs::Marker::DELETE;
-//   line_list.markers[i].points.clear();
-//   cube_list.markers[i].points.clear();
-//   cube_pub.publish(cube_list);
-//   marker_pub.publish(line_list);
+
 
 
 
@@ -400,7 +397,9 @@ void publish_extra(const ros::Time& publish_time)
     bool show_YOLO=true;
     bool show_locked=false;
     bool show_w_corner=false;
-    //cout << "SPEED" << tmp_V.transpose() <<  endl;
+
+
+
 
   //if(track_image_pub_.getNumSubscribers() > 0){
     display_all = cv_bridge::cvtColor(display_all, sensor_msgs::image_encodings::BGR8);
@@ -424,14 +423,31 @@ void publish_extra(const ros::Time& publish_time)
         putText(image, "YOLO", Point2f(300+20*b,100+20*b), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,0,255), 2 );
 }
 
+        if(acc_delay>4){
+            acc_delay=0;
+            un_acc_nxt=un_acc_prev;}
+        if((abs(tmp_V[0])>1 || abs(tmp_V[1])>1 || abs(tmp_V[2])>1 )){ //if the speed is high
+            speed_peak=true;
+            cout << " PEAK===" << tmp_V<< endl;
+
+        }else if ((abs(tmp_V[0])<0.3 && abs(tmp_V[1])<0.3&& abs(tmp_V[2])<0.3 ) && speed_peak ){ //and the robot deccelearate
+            speed_peak=false;
+            deccel=true;
+
+            cout << "DECCEL" << endl;
+        }
+        if((abs(tmp_V[0])<0.04&& abs(tmp_V[1])<0.04 && abs(tmp_V[2])<0.05 ) && deccel ){
+            deccel=false;
+            cout << "END  DECCEL" << endl;
+            speed_peak=false;
+
+        }
+
 
 }
         //ROS_INFO_STREAM("Drawing" << bbTracker_.bbox_State_vect.size()<< "bounding boxes");
 
     for (int i=0; i<bbTracker_.bbox_State_vect.size(); i++){
-
-
-
     //bounding box predicted
     bbTracker_.project_pixel_to_pixel();
     for (unsigned int i=0; i<bbTracker_.bbox_State_vect.size(); i++){
@@ -458,10 +474,10 @@ void publish_extra(const ros::Time& publish_time)
         //if speed to high we take the CNN width but with the position of the reproj for the final tracking
 if (abs(tmp_V[0])>0.1 || abs(tmp_V[1])>0.1 || abs(tmp_V[2])>0.1)
             bbTracker_.reproj(0.4);
-if (abs(tmp_V[0])>0.3 || abs(tmp_V[1])>0.3 || abs(tmp_V[2])>0.3)
+if (abs(tmp_V[0])>0.3 || abs(tmp_V[1])>0.3 || abs(tmp_V[2])>0.3 || deccel)
             bbTracker_.reproj(0);
 
-        if (abs(tmp_V[0])>0.03 || abs(tmp_V[1])>0.03 || abs(tmp_V[2])>0.03 && bbTracker_.bbox_State_vect[i].lock_proba>=15){
+        if (abs(tmp_V[0])>0.03 || abs(tmp_V[1])>0.03 || abs(tmp_V[2])>0.03 || deccel && bbTracker_.bbox_State_vect[i].lock_proba>=15){
             float x_avg = (bbTracker_.bbox_State_vect[i].cur_detection.xmin + bbTracker_.bbox_State_vect[i].cur_detection.xmax)/2;
             float y_avg = (bbTracker_.bbox_State_vect[i].cur_detection.ymin + bbTracker_.bbox_State_vect[i].cur_detection.ymax)/2;
 
@@ -470,16 +486,14 @@ if (abs(tmp_V[0])>0.3 || abs(tmp_V[1])>0.3 || abs(tmp_V[2])>0.3)
             bbTracker_.bbox_State_vect[i].final_bb[2] = cv::Point2f(x_avg-bbTracker_.bbox_State_vect[i].w_l.first/2, y_avg+bbTracker_.bbox_State_vect[i].w_l.second/2) ; //
             bbTracker_.bbox_State_vect[i].final_bb[3] = cv::Point2f(x_avg+bbTracker_.bbox_State_vect[i].w_l.first/2, y_avg+bbTracker_.bbox_State_vect[i].w_l.second/2) ;
             cv::rectangle(image, bbTracker_.bbox_State_vect[i].final_bb[0], bbTracker_.bbox_State_vect[i].final_bb[3],cv::Scalar(255, 255, 255), 2, 8, 0) ;
-            cout << "%%%%%%%%%% From cur detection" << bbTracker_.bbox_State_vect[i].final_bb[0] << bbTracker_.bbox_State_vect[i].final_bb[1] << bbTracker_.bbox_State_vect[i].final_bb[2] << "with widt/lenght" <<
-                   bbTracker_.bbox_State_vect[i].w_l.first/2 << " "<<bbTracker_.bbox_State_vect[i].w_l.second/2 <<  endl;
-            cout << "debug cur detec after0" << endl;
+          //  cout << "%%%%%%%%%% From cur detection" << bbTracker_.bbox_State_vect[i].final_bb[0] << bbTracker_.bbox_State_vect[i].final_bb[1] << bbTracker_.bbox_State_vect[i].final_bb[2] << "with widt/lenght" <<
+         //          bbTracker_.bbox_State_vect[i].w_l.first/2 << " "<<bbTracker_.bbox_State_vect[i].w_l.second/2 <<  endl;
+           // cout << "debug cur detec after0" << endl;
 
         }else{
-            cout << "debug cur detec bef" << endl;
 
             bbTracker_.bbox_to_points_cv(bbTracker_.bbox_State_vect[i].cur_detection, bbox_corner ); //deduced corner takes the bbox_state.w_corner[0] and project them in the current cam_image frame
             cv::rectangle(image, bbox_corner[0], bbox_corner[3],cv::Scalar(255, 255, 255), 2, 8, 0) ;
-            cout << "debug cur detec after" << endl;
 
         }
 
@@ -490,9 +504,13 @@ if (abs(tmp_V[0])>0.3 || abs(tmp_V[1])>0.3 || abs(tmp_V[2])>0.3)
        putText(image, std::to_string(bbTracker_.bbox_State_vect[i].bbox_id), Point2f(100,300+(30*i)), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
        putText(image, bbTracker_.bbox_State_vect[i].class_, Point2f(300,300+(30*i)), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,0,0,0), 2 );
 
-       putText(image, "V_x=" + std::to_string(tmp_V[0]), Point2f(400,100), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
-       putText(image, "V_y=" + std::to_string(tmp_V[1]), Point2f(400,200), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
-       putText(image, "V_z=" +  std::to_string(tmp_V[2]), Point2f(400,300), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(255,255,255,255), 2 );
+       putText(image, "V_x=" + std::to_string(tmp_V[0]).substr (0,4), Point2f(10,100), cv::FONT_HERSHEY_PLAIN, 1,  cv::Scalar(255,255,255,255), 2 );
+       putText(image, "V_y=" + std::to_string(tmp_V[1]).substr (0,4), Point2f(10,200), cv::FONT_HERSHEY_PLAIN, 1,  cv::Scalar(255,255,255,255), 2 );
+       putText(image, "V_z=" +  std::to_string(tmp_V[2]).substr (0,4), Point2f(10,300), cv::FONT_HERSHEY_PLAIN, 1,  cv::Scalar(255,255,255,255), 2 );
+
+//       putText(image, "x=" + std::to_string(tmp_P[0]), Point2f(400,150), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,255,255,255), 2 );
+//       putText(image, "y=" + std::to_string(tmp_P[1]), Point2f(400,250), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,255,255,255), 2 );
+//       putText(image, "z=" +  std::to_string(tmp_P[2]), Point2f(400,350), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,255,255,255), 2 );
 
         if (show_locked){
        bbTracker_.project_world_to_pixel(bbTracker_.bbox_State_vect[i].locked_corner_def, predicted_bbox);
@@ -500,6 +518,16 @@ if (abs(tmp_V[0])>0.3 || abs(tmp_V[1])>0.3 || abs(tmp_V[2])>0.3)
        //DEDUCED FROM LOCKED IN WHITE
        cv::rectangle(image, deduced_corner[0], deduced_corner[3],cv::Scalar(255, 0, 0), 2, 8, 0) ;
 }
+        //check acceleration between frame of sliding window
+//        if(deccel==true){
+//            putText(image, "deccel" , Point2f(200, 30), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,255,255,255), 2 );
+
+//        }
+//        if((un_acc_nxt-un_acc_prev).norm()>0.1 || (un_acc_prev-un_acc_nxt).norm()>0.1 ){
+
+//            putText(image, "acc" +  std::to_string((un_acc_prev).norm()) + " " + std::to_string((estimator.Vs[WINDOW_SIZE-4]-tmp_V).norm()), Point2f(30, 30), cv::FONT_HERSHEY_PLAIN, 2,  cv::Scalar(0,255,255,255), 2 );
+
+//        }
         }
 
     for (unsigned int k=0; k<4;k++){
@@ -526,7 +554,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
 
     bbTracker_.frame_count++;
-    cout<< "Frame count is " << bbTracker_.frame_count << endl;
+//cout<< "Frame count is " << bbTracker_.frame_count << endl;
 
     cv_bridge::CvImageConstPtr ptr;
     if (img_msg->encoding == "8UC1")
@@ -575,7 +603,7 @@ bool first=false;
  vector<int> assignment, left;
 
 
-    cout <<"RECEIVING " << bboxes_ros->bounding_boxes.size() << "bboxes" << endl; //print the full topic
+    cout <<"RECEIVING " << bboxes_ros->bounding_boxes.size() << " bboxes in callback " << endl; //print the full topic
 
         if (img_msg->encoding == "8UC1")
         {
@@ -613,7 +641,7 @@ bool first=false;
 
 
         HungarianAlgorithm HungAlgo;
-        cout << "SPEED" << tmp_V.transpose() << "delayed" << tmp_V_delayed << endl;
+        //cout << "SPEED" << tmp_V.transpose() <<  "delayed " << tmp_V_delayed << endl;
         if (abs(tmp_V_delayed[0])>0.1 ||abs(tmp_V_delayed[1])>0.1 ||abs(tmp_V_delayed[2])>0.1  ){
            thresh_IOU = 0.1;
         }
@@ -640,8 +668,8 @@ bool first=false;
                // cout << "Wrong bounding box format, skipped" << endl;
             }
             bbTracker_.bb_state_.img_bboxes= bboxes;
-            if (boundingBox.Class != "chair")
-                return;
+         //   if (boundingBox.Class != "chair")
+         //       return;
                 boundingBox = bboxes.list[i];
             bbTracker_.frame_count =0;
             un_bbox = bbTracker_.undistortPoint(boundingBox);
@@ -656,7 +684,7 @@ bool first=false;
                         bool tracked = false;
 
 
-            cout <<"for bbox" << i <<endl;
+            //cout <<"for bbox" << i <<endl;
                       //check if bbox is already tracked
                       if (!first) {
                       for (unsigned j=0; j<bbTracker_.bbox_State_vect.size(); j++){ //check if really updating
@@ -699,16 +727,16 @@ bool first=false;
 //                  for (auto bbox_added : reserve){
 //                      bbTracker_.bbox_State_vect.push_back(bbox_added);
 //                  }
-            // To find out the best assignment of people to jobs we just need to call this function.
+            // 2nd check with hungarian algo to check To find out the best assignment of people to jobs we just need to call this function.
 
                 if (iou_cost.size()>0){
                double cost = HungAlgo.Solve(iou_cost, assignment);
-               for (unsigned int x = 0; x < iou_cost.size(); x++)
-                                if (assignment[x]>=0){
-                               std::cout << "bbox detect at index " << x << " is associated to tracker index " << assignment[x] <<" with tracker id "<< bbTracker_.bbox_State_vect[x].bbox_id << endl;
-                                } else {
+               //for (unsigned int x = 0; x < iou_cost.size(); x++)
+//                                if (assignment[x]>=0){
+//                               std::cout << "bbox detect at index " << x << " is associated to tracker index " << assignment[x] <<" with tracker id "<< bbTracker_.bbox_State_vect[x].bbox_id << endl;
+//                                } else {
                                     //cout << "bbox detect  at index" << x << " assignment failed" << assignment[x] << endl;
-                                }
+              //}
 
         for (int j=0; j<bbTracker_.bbox_State_vect.size(); j++)
         {
@@ -982,7 +1010,7 @@ void process()
             pubPointCloud(estimator, header);
             pubTF(estimator, header);
             pubKeyframe(estimator);
-            //publish_rviz(img_msg->header.stamp);
+            publish_rviz(img_msg->header.stamp);
             publish_extra(img_msg->header.stamp);
             if (relo_msg != NULL)
                 pubRelocalization(estimator);
@@ -1081,6 +1109,7 @@ int main(int argc, char **argv)
     //ros::Subscriber bb_sub_= n.subscribe("bounding_boxes", 2000, boundingboxesCallback);
     marker_pub = n.advertise<visualization_msgs::MarkerArray>("lines", 2000);
     cube_pub = n.advertise<visualization_msgs::MarkerArray>("cube_bbox", 2000);
+    temp_cube_pub = n.advertise<visualization_msgs::MarkerArray>("temp_cube_bbox", 2000);
     //track_image_pub_ = it.advertise("track_overlay_image", 1);
     track_image_pub_ = n.advertise<sensor_msgs::Image>("track_overlay_image",2000); //for the bbox check
     optical_image_pub_ = n.advertise<sensor_msgs::Image>("optical_result",2000); //for the bbox check

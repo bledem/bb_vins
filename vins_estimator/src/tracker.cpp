@@ -140,6 +140,7 @@ bbox_State_vect[j].final_bb[3] = cv::Point2f(boundingBox.xmax, boundingBox.ymax)
 //cv::undistort() is an approximate iterative algorithm that estimates the normalized original point coordinates
 //out of the normalized distorted point coordinates (“normalized” means that the coordinates do not depend
 //on the camera matrix).
+//out: deduced pixel prjected from the depth and the first bbox && and deduced 3D corner
 void bbTracker_t::project_pixel_to_pixel(){
 
     for (unsigned k=0; k<bbox_State_vect.size(); k++) {
@@ -251,8 +252,9 @@ void bbTracker_t::project_world_to_pixel(  Eigen::Vector3d corner[],
 
 
 void bbTracker_t::predict_missing(Eigen::Vector3d (& w_corner)[4], int missing, float avg_x){
+    cout << "in predict missing i value is" << missing << endl;
+
     switch (missing) {
-    //cout << "in predict missing i value is" << missing << endl;
 
            case 0: //tl missing
         w_corner[missing][0]= avg_x;
@@ -276,13 +278,14 @@ void bbTracker_t::predict_missing(Eigen::Vector3d (& w_corner)[4], int missing, 
         w_corner[missing][0]= avg_x;
         w_corner[missing][1]= w_corner[1][1];
         w_corner[missing][2]= w_corner[2][1];
+        break;
            case 4:
         std::cout << "error in missing corner" << endl;
 }
 }
 
 
-float calc_err(Eigen::Vector3d w_corner[4]){
+float calc_err(Eigen::Vector3d w_corner[4]){ //tl, tr, bl, br box
     Eigen::Vector3d tl = w_corner[0];
     Eigen::Vector3d tr = w_corner[1];
     Eigen::Vector3d br = w_corner[3];
@@ -291,6 +294,7 @@ float calc_err(Eigen::Vector3d w_corner[4]){
     float err_x = abs(tl[0] - tr[0]) + abs(tl[0]-br[0]) + abs(tr[0] - br[0]) + abs(br[0]-bl[0]);
     float err_y = abs(tr[1]-br[1]) + abs(tl[1]-bl[1]);
     float err_z = abs(bl[2]-br[2]) + abs(tl[1]-tr[2]);
+    //cout<< "err_x:" <<err_x <<" and err_y:" << err_y << " and err_z: " << err_z << endl;
     return err_x + err_y + err_z;
 }
 
@@ -314,27 +318,29 @@ void bbTracker_t::lock_bbox(){
                 avg[2]+= bbox_State_vect[k].w_corner[i][2]; //z
                 count++;
 
-            } else if (count_miss<=1) {
+            } else if (count_miss<1) { //we accept only one missing value anyway
                 missing_=i;
                 //cout << "missing " << i <<" value is" << int(missing_) << endl;
                 count_miss++;
             }
             }
-
+cout << "count is" << count << " for id" <<bbox_State_vect[k].bbox_id  << endl;
         if (count == 3){ //we approximate the value of the missing corner
             predict_missing(bbox_State_vect[k].w_corner, missing_, avg[0]);
+            count++;
         }
-        if ((count==4 || count ==3) ){
-            //cout << "enough corner, count proba:" << bbox_State_vect[k].lock_proba+1 << " and id is " << bbox_State_vect[k].bbox_id << " with values " <<  bbox_State_vect[k].avg[0]<< " " << bbox_State_vect[k].avg[1] << " " << bbox_State_vect[k].avg[2] <<
-            //        "locked size is  " <<  bbox_State_vect[k].locked_vec.size() <<endl;
+        if (count==4 ){
+            cout << "enough corner, count proba:" << bbox_State_vect[k].lock_proba+1 << " and id is " << bbox_State_vect[k].bbox_id << " with values avg" <<  bbox_State_vect[k].avg[0]<< " "
+                 << bbox_State_vect[k].avg[1] << " " << bbox_State_vect[k].avg[2] <<endl;
 
              bbox_State_vect[k].lock_proba++;
+
          if (bbox_State_vect[k].lock_proba<15){
             for (unsigned int i=0; i<4; i++){
                     bbox_State_vect[k].locked_corner[i]=(bbox_State_vect[k].w_corner[i]);
 
         }
-            bbox_State_vect[k].avg[0]=avg[0]/float(count);
+            bbox_State_vect[k].avg[0]=avg[0]/float(count); //not used
             bbox_State_vect[k].avg[1]=avg[1]/float(count);
             bbox_State_vect[k].avg[2]=avg[2]/float(count);
 
@@ -342,23 +348,21 @@ void bbTracker_t::lock_bbox(){
          } else if (bbox_State_vect[k].lock_proba >=15) {
              float err_temp = calc_err(bbox_State_vect[k].w_corner);
              float err_def = calc_err(bbox_State_vect[k].locked_corner_def);
-
+            cout << "err temp:" << err_temp << " err def:" << err_def << endl;
              for (unsigned int i=0; i<4; i++){
                  if (bbox_State_vect[k].w_corner[i][0] != 0.0)
                      bbox_State_vect[k].locked_corner[i]=(bbox_State_vect[k].w_corner[i]);
 
                      vec_corner.push_back(bbox_State_vect[k].w_corner[i]);
-                 if (bbox_State_vect[k].lock_proba ==15 || err_def < err_temp && bbox_State_vect[k].w_corner[i][0] != 0.0){
-                        cout << "UPDATING LOCKED DEF for state bbox_id" << bbox_State_vect[k].bbox_id <<endl;
+                 if ( err_def > err_temp || err_def != err_def || bbox_State_vect[k].lock_proba ==15){
+                        cout << "UPDATING LOCKED DEF for state bbox_id" << bbox_State_vect[k].bbox_id << "for i: " << i << "and corner value" << bbox_State_vect[k].w_corner[i] <<endl;
                          bbox_State_vect[k].locked_corner_def[i] = bbox_State_vect[k].w_corner[i];
                          bbox_State_vect[k].locked_def= true;}
                  if (i<3)
-                    avg_vec[i]=avg[i]/float(count);
-                 cout <<"debug1" << endl;
+                    avg_vec[i]=avg[i]/float(count); //on x,y,z
 
 
                  bbox_State_vect[k].locked_bbox= ( std::make_pair(vec_corner, avg_vec));
-                 cout <<"debug2" << endl;
 
             //cv::Ptr<cv::TrackerKCF> tracker = cv::TrackerKCF::create();
 //cout <<"before multritracker add" << endl;
@@ -430,11 +434,11 @@ void bbTracker_t::reproj(float thresh){
         bbox_to_points_cv(predicted_bbox,bbox_corner );
         if(err_temp<=err_def){
             project_world_to_pixel(bbox_State_vect[k].locked_corner, predicted_bbox);
-            cout<< "############################## We merge with reprojection with last locked! with thresh"<< thresh << "error is" << err_temp << "better than" << err_def << endl;
+            //cout<< "############################## We merge with reprojection with last locked! with thresh"<< thresh << "error is" << err_temp << "better than" << err_def << endl;
 
         }else{
             project_world_to_pixel(bbox_State_vect[k].locked_corner_def, predicted_bbox);
-            cout<< "############################## We merge with reprojection! with def locked thresh"<< thresh << "error is " << err_def <<"better than" <<err_temp << endl;
+            //cout<< "############################## We merge with reprojection! with def locked thresh"<< thresh << "error is " << err_def <<"better than" <<err_temp << endl;
 
         }
 
@@ -472,7 +476,6 @@ float bbTracker_t::shift_bbox(Utility::bboxState<float>& bbox_state, cv::Mat new
     new_frame.convertTo(new_frame, CV_8UC1);
     prev_frame.convertTo(prev_frame, CV_8UC1);
     cvtColor(new_frame, new_frame, CV_BGR2GRAY);
-cout<<"before "<< endl;
    // string ty =  type2str( prev_frame.type() );
    // printf("Matrix: %s %dx%d \n", ty.c_str(), prev_frame.cols, prev_frame.rows );
    // string ty2 =  type2str( new_frame.type() );
@@ -533,9 +536,8 @@ bbox_state.cur_detection.xmin = corners_forw[0].x;
 bbox_state.cur_detection.ymin = corners_forw[0].y;
 bbox_state.cur_detection.xmax = corners_forw[3].x;
 bbox_state.cur_detection.ymax = corners_forw[3].y;
-cout << "Optical flow to update the bbox " << bbox_state.bbox_id << endl;
+cout << "Optical flow to update the bbox " << int(bbox_state.bbox_id) << endl;
 bbox_state.type_detection= "optical";
-cout<<"after "<< endl;
 
 return 0;
 } else if (matcher){
