@@ -12,6 +12,7 @@
  #include <cv_bridge/cv_bridge.h>
 #include <visualization_msgs/Marker.h>
 #include <message_filters/time_synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/subscriber.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <image_transport/image_transport.h>
@@ -188,7 +189,6 @@ getMeasurements()
 
 void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 {
-
     if (imu_msg->header.stamp.toSec() <= last_imu_t)
     {
         ROS_WARN("imu message in disorder!");
@@ -595,6 +595,8 @@ void img_display_callback(const sensor_msgs::ImageConstPtr &img_msg)
 
 void sync_callback(const sensor_msgs::ImageConstPtr &img_msg, const darknet_ros_msgs::BoundingBoxesConstPtr &bboxes_ros){
 bool first=false;
+//cout <<"RECEIVING " << bboxes_ros->bounding_boxes.size() << " bboxes in callback " << endl; //print the full topic
+
  if (estimator.solver_flag != Estimator::SolverFlag::NON_LINEAR)
      return;
  if (bbTracker_.bbox_State_vect.size()==0)
@@ -603,7 +605,6 @@ bool first=false;
  vector<int> assignment, left;
 
 
-    cout <<"RECEIVING " << bboxes_ros->bounding_boxes.size() << " bboxes in callback " << endl; //print the full topic
 
         if (img_msg->encoding == "8UC1")
         {
@@ -1102,7 +1103,8 @@ int main(int argc, char **argv)
     ros::Subscriber sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_image = n.subscribe("/feature_tracker/feature", 2000, feature_callback);
     ros::Subscriber sub_image_tracked = n.subscribe("/feature_tracker/feature_img", 2000, img_display_callback);
-    ros::Subscriber sub_cam_image = n.subscribe("/hummingbird/vi_sensor/left/image_raw", 2000, img_callback);
+   // ros::Subscriber sub_cam_image = n.subscribe("/hummingbird/vi_sensor/left/image_raw", 2000, img_callback);
+    ros::Subscriber sub_cam_image = n.subscribe("/cam0/image_raw", 2000, img_callback);
     pub_corner_point = n.advertise<sensor_msgs::PointCloud>("corner_point", 1000);
     ros::Subscriber sub_restart = n.subscribe("/feature_tracker/restart", 2000, restart_callback);
     ros::Subscriber sub_relo_points = n.subscribe("/pose_graph/match_points", 2000, relocalization_callback);
@@ -1116,10 +1118,14 @@ int main(int argc, char **argv)
 
     message_filters::Subscriber<sensor_msgs::Image> sub_darknet_image(n, "/detection_image", 2000);
     message_filters::Subscriber<darknet_ros_msgs::BoundingBoxes> bb_sub_(n,"/bounding_boxes", 2000);
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, darknet_ros_msgs::BoundingBoxes> MySyncPolicy;
+    message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), sub_darknet_image, bb_sub_);
+     sync.registerCallback(boost::bind(&sync_callback, _1, _2));
 
-    message_filters::TimeSynchronizer<sensor_msgs::Image, darknet_ros_msgs::BoundingBoxes>
-            sync(sub_darknet_image, bb_sub_, 2000);
-    sync.registerCallback(boost::bind(&sync_callback, _1, _2));
+
+//    message_filters::TimeSynchronizer<sensor_msgs::Image, darknet_ros_msgs::BoundingBoxes>
+//            sync(sub_darknet_image, bb_sub_, 2000);
+//    sync.registerCallback(boost::bind(&sync_callback, _1, _2));
 
     std::thread measurement_process{process};
     ros::spin();
